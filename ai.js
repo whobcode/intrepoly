@@ -1,4 +1,8 @@
-// The purpose of this AI is not to be a relistic opponant, but to give an example of a vaild AI player.
+/**
+ * The purpose of this AI is not to be a relistic opponant, but to give an example of a vaild AI player.
+ * @constructor
+ * @param {Player} p - The player object that this AI will control.
+ */
 function AITest(p) {
 	this.alertList = "";
 
@@ -7,10 +11,11 @@ function AITest(p) {
 
 	p.name = "AI Test " + this.constructor.count;
 
-	// Decide whether to buy a property the AI landed on.
-	// Return: boolean (true to buy).
-	// Arguments:
-	// index: the property's index (0-39).
+	/**
+	 * Decide whether to buy a property the AI landed on.
+	 * @param {number} index - The property's index (0-39).
+	 * @returns {boolean} True to buy, false otherwise.
+	 */
 	this.buyProperty = function(index) {
 		console.log("buyProperty");
 		var s = square[index];
@@ -23,10 +28,11 @@ function AITest(p) {
 
 	}
 
-	// Determine the response to an offered trade.
-	// Return: boolean/instanceof Trade: a valid Trade object to counter offer (with the AI as the recipient); false to decline; true to accept.
-	// Arguments:
-	// tradeObj: the proposed trade, an instanceof Trade, has the AI as the recipient.
+	/**
+	 * Determine the response to an offered trade.
+	 * @param {Trade} tradeObj - The proposed trade, an instanceof Trade, has the AI as the recipient.
+	 * @returns {boolean|Trade} A valid Trade object to counter offer (with the AI as the recipient); false to decline; true to accept.
+	 */
 	this.acceptTrade = function(tradeObj) {
 		console.log("acceptTrade");
 
@@ -60,8 +66,10 @@ function AITest(p) {
 		return false;
 	}
 
-	// This function is called at the beginning of the AI's turn, before any dice are rolled. The purpose is to allow the AI to manage property and/or initiate trades.
-	// Return: boolean: Must return true if and only if the AI proposed a trade.
+	/**
+	 * This function is called at the beginning of the AI's turn, before any dice are rolled. The purpose is to allow the AI to manage property and/or initiate trades.
+	 * @returns {boolean} Must return true if and only if the AI proposed a trade.
+	 */
 	this.beforeTurn = function() {
 		console.log("beforeTurn");
 		var s;
@@ -118,8 +126,10 @@ function AITest(p) {
 	var utilityForRailroadFlag = true; // Don't offer this trade more than once.
 
 
-	// This function is called every time the AI lands on a square. The purpose is to allow the AI to manage property and/or initiate trades.
-	// Return: boolean: Must return true if and only if the AI proposed a trade.
+	/**
+	 * This function is called every time the AI lands on a square. The purpose is to allow the AI to manage property and/or initiate trades.
+	 * @returns {boolean} Must return true if and only if the AI proposed a trade.
+	 */
 	this.onLand = function() {
 		console.log("onLand");
 		var proposedTrade;
@@ -159,8 +169,10 @@ function AITest(p) {
 		return false;
 	}
 
-	// Determine whether to post bail/use get out of jail free card (if in possession).
-	// Return: boolean: true to post bail/use card.
+	/**
+	 * Determine whether to post bail/use get out of jail free card (if in possession).
+	 * @returns {boolean} True to post bail/use card.
+	 */
 	this.postBail = function() {
 		console.log("postBail");
 
@@ -172,8 +184,9 @@ function AITest(p) {
 		}
 	}
 
-	// Mortgage enough properties to pay debt.
-	// Return: void: don't return anything, just call the functions mortgage()/sellhouse()
+	/**
+	 * Mortgage enough properties to pay debt.
+	 */
 	this.payDebt = function() {
 		console.log("payDebt");
 		for (var i = 39; i >= 0; i--) {
@@ -191,8 +204,12 @@ function AITest(p) {
 
 	}
 
-	// Determine what to bid during an auction.
-	// Return: integer: -1 for exit auction, 0 for pass, a positive value for the bid.
+	/**
+	 * Determine what to bid during an auction.
+	 * @param {number} property - The index of the property being auctioned.
+	 * @param {number} currentBid - The current highest bid.
+	 * @returns {number} -1 for exit auction, 0 for pass, a positive value for the bid.
+	 */
 	this.bid = function(property, currentBid) {
 		console.log("bid");
 		var bid;

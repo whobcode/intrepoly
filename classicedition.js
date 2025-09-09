@@ -1,3 +1,18 @@
+/**
+ * Represents a square on the Monopoly board.
+ * @constructor
+ * @param {string} name - The name of the square.
+ * @param {string} pricetext - The text representation of the price.
+ * @param {string} color - The color of the square's group.
+ * @param {number} price - The price of the property.
+ * @param {number} groupNumber - The group number of the property.
+ * @param {number} baserent - The base rent of the property.
+ * @param {number} rent1 - The rent with one house.
+ * @param {number} rent2 - The rent with two houses.
+ * @param {number} rent3 - The rent with three houses.
+ * @param {number} rent4 - The rent with four houses.
+ * @param {number} rent5 - The rent with a hotel.
+ */
 function Square(name, pricetext, color, price, groupNumber, baserent, rent1, rent2, rent3, rent4, rent5) {
 	this.name = name;
 	this.pricetext = pricetext;
@@ -29,11 +44,20 @@ function Square(name, pricetext, color, price, groupNumber, baserent, rent1, ren
 	}
 }
 
+/**
+ * Represents a Chance or Community Chest card.
+ * @constructor
+ * @param {string} text - The text on the card.
+ * @param {Function} action - The function to execute when the card is drawn.
+ */
 function Card(text, action) {
 	this.text = text;
 	this.action = action;
 }
 
+/**
+ * Applies corrections to the board for the classic edition.
+ */
 function corrections() {
 	document.getElementById("cell1name").textContent = "Mediter-ranean Avenue";
 
@@ -46,14 +70,25 @@ function corrections() {
 	document.getElementById("enlarge28token").innerHTML += '<img src="images/water_icon.png" height="60" width="78" alt="" style="position: relative; top: -20px;" />';
 }
 
+/**
+ * Returns the HTML text for the utility properties' deeds.
+ * @returns {string} The HTML text for the utility deeds.
+ */
 function utiltext() {
 	return '&nbsp;&nbsp;&nbsp;&nbsp;If one "Utility" is owned rent is 4 times amount shown on dice.<br /><br />&nbsp;&nbsp;&nbsp;&nbsp;If both "Utilitys" are owned rent is 10 times amount shown on dice.';
 }
 
+/**
+ * Returns the HTML text for the railroad properties' deeds.
+ * @returns {string} The HTML text for the railroad deeds.
+ */
 function transtext() {
 	return '<div style="font-size: 14px; line-height: 1.5;">Rent<span style="float: right;">$25.</span><br />If 2 Railroads are owned<span style="float: right;">50.</span><br />If 3 &nbsp; &nbsp; " &nbsp; &nbsp; " &nbsp; &nbsp; "<span style="float: right;">100.</span><br />If 4 &nbsp; &nbsp; " &nbsp; &nbsp; " &nbsp; &nbsp; "<span style="float: right;">200.</span></div>';
 }
 
+/**
+ * Handles the Luxury Tax square.
+ */
 function luxurytax() {
 	addAlert(player[turn].name + " paid $100 for landing on Luxury Tax.");
 	player[turn].pay(100, 0);
@@ -61,6 +96,9 @@ function luxurytax() {
 	$("#landed").show().text("You landed on Luxury Tax. Pay $100.");
 }
 
+/**
+ * Handles the City Tax square.
+ */
 function citytax() {
 	addAlert(player[turn].name + " paid $200 for landing on City Tax.");
 	player[turn].pay(200, 0);
