@@ -1,3 +1,7 @@
+/**
+ * Represents the main game engine for Monopoly.
+ * @constructor
+ */
 function Game() {
 	var die1;
 	var die2;
@@ -9,16 +13,25 @@ function Game() {
 	var currentbidder = 1;
 	var auctionproperty;
 
+	/**
+	 * Simulates rolling two dice.
+	 */
 	this.rollDice = function() {
 		die1 = Math.floor(Math.random() * 6) + 1;
 		die2 = Math.floor(Math.random() * 6) + 1;
 		areDiceRolled = true;
 	};
 
+	/**
+	 * Resets the dice to their unrolled state.
+	 */
 	this.resetDice = function() {
 		areDiceRolled = false;
 	};
 
+	/**
+	 * Advances the game to the next turn or action.
+	 */
 	this.next = function() {
 		if (!p.human && p.money < 0) {
 			p.AI.payDebt();
@@ -35,6 +48,11 @@ function Game() {
 		}
 	};
 
+	/**
+	 * Gets the value of one of the dice.
+	 * @param {number} die The die to get the value of (1 or 2).
+	 * @returns {number} The value of the specified die.
+	 */
 	this.getDie = function(die) {
 		if (die === 1) {
 
@@ -74,10 +92,18 @@ function Game() {
 		}
 	};
 
+	/**
+	 * Adds a property to the auction queue.
+	 * @param {number} propertyIndex The index of the property to add to the auction queue.
+	 */
 	this.addPropertyToAuctionQueue = function(propertyIndex) {
 		auctionQueue.push(propertyIndex);
 	};
 
+	/**
+	 * Starts an auction for the next property in the queue.
+	 * @returns {boolean} True if an auction was started, false otherwise.
+	 */
 	this.auction = function() {
 		if (auctionQueue.length === 0) {
 			return false;
@@ -159,6 +185,9 @@ function Game() {
 		return true;
 	};
 
+	/**
+	 * Passes the current player's turn in an auction.
+	 */
 	this.auctionPass = function() {
 		if (highestbidder === 0) {
 			highestbidder = currentbidder;
@@ -208,6 +237,10 @@ function Game() {
 		document.getElementById("bid").style.color = "black";
 	};
 
+	/**
+	 * Places a bid in an auction.
+	 * @param {number} [bid] The amount to bid. If not provided, the value from the input field is used.
+	 */
 	this.auctionBid = function(bid) {
 		bid = bid || parseInt(document.getElementById("bid").value, 10);
 
@@ -240,6 +273,9 @@ function Game() {
 		}
 	};
 
+	/**
+	 * Exits the current player from an auction.
+	 */
 	this.auctionExit = function() {
 		player[currentbidder].bidding = false;
 		this.auctionPass();
@@ -705,6 +741,10 @@ function Game() {
 
 	};
 
+	/**
+	 * Initiates a trade between the current player and another player.
+	 * @param {Trade} [tradeObj] - An optional trade object to pre-populate the trade window.
+	 */
 	this.trade = function(tradeObj) {
 		$("#board").hide();
 		$("#control").hide();
@@ -729,6 +769,9 @@ function Game() {
 	};
 
 
+	/**
+	 * Cancels the current trade and returns to the game.
+	 */
 	this.cancelTrade = function() {
 		$("#board").show();
 		$("#control").show();
@@ -742,6 +785,11 @@ function Game() {
 
 	};
 
+	/**
+	 * Accepts the current trade.
+	 * @param {Trade} [tradeObj] - An optional trade object to accept.
+	 * @returns {boolean} False if the trade is invalid, otherwise true.
+	 */
 	this.acceptTrade = function(tradeObj) {
 		if (isNaN(document.getElementById("trade-leftp-money").value)) {
 			document.getElementById("trade-leftp-money").value = "This value must be a number.";
@@ -862,6 +910,10 @@ function Game() {
 		}
 	};
 
+	/**
+	 * Proposes the current trade to the other player.
+	 * @returns {boolean} False if the trade is invalid, otherwise true.
+	 */
 	this.proposeTrade = function() {
 		if (isNaN(document.getElementById("trade-leftp-money").value)) {
 			document.getElementById("trade-leftp-money").value = "This value must be a number.";
@@ -952,6 +1004,9 @@ function Game() {
 
 
 
+	/**
+	 * Eliminates the current player from the game.
+	 */
 	this.eliminatePlayer = function() {
 		var p = player[turn];
 
@@ -999,6 +1054,9 @@ function Game() {
 		}
 	};
 
+	/**
+	 * Allows a creditor to unmortgage properties acquired from a bankrupt player.
+	 */
 	this.bankruptcyUnmortgage = function() {
 		var p = player[turn];
 
@@ -1036,10 +1094,16 @@ function Game() {
 		popup(HTML, game.eliminatePlayer);
 	};
 
+	/**
+	 * Allows a player to resign from the game.
+	 */
 	this.resign = function() {
 		popup("<p>Are you sure you want to resign?</p>", game.bankruptcy, "Yes/No");
 	};
 
+	/**
+	 * Handles a player's bankruptcy.
+	 */
 	this.bankruptcy = function() {
 		var p = player[turn];
 		var pcredit = player[p.creditor];
@@ -1107,6 +1171,12 @@ function Game() {
 var game;
 
 
+/**
+ * Represents a player in the game.
+ * @param {string} name - The name of the player.
+ * @param {string} color - The color of the player's token.
+ * @constructor
+ */
 function Player(name, color) {
 	this.name = name;
 	this.color = color;
@@ -1121,6 +1191,12 @@ function Player(name, color) {
 	this.human = true;
 	// this.AI = null;
 
+	/**
+	 * Pays a certain amount of money to a creditor.
+	 * @param {number} amount - The amount of money to pay.
+	 * @param {number} creditor - The index of the player to pay.
+	 * @returns {boolean} True if the player had enough money, false otherwise.
+	 */
 	this.pay = function (amount, creditor) {
 		if (amount <= this.money) {
 			this.money -= amount;
@@ -1139,36 +1215,64 @@ function Player(name, color) {
 	};
 }
 
-// paramaters:
-// initiator: object Player
-// recipient: object Player
-// money: integer, positive for offered, negative for requested
-// property: array of integers, length: 40
-// communityChestJailCard: integer, 1 means offered, -1 means requested, 0 means neither
-// chanceJailCard: integer, 1 means offered, -1 means requested, 0 means neither
+/**
+ * Represents a trade between two players.
+ * @param {Player} initiator - The player initiating the trade.
+ * @param {Player} recipient - The player receiving the trade.
+ * @param {number} money - The amount of money to exchange. Positive for offered, negative for requested.
+ * @param {Array<number>} property - An array representing the properties to exchange. 1 for offered, -1 for requested, 0 for neither.
+ * @param {number} communityChestJailCard - 1 if the initiator's "Get Out of Jail Free" card is offered, -1 if the recipient's is requested, 0 otherwise.
+ * @param {number} chanceJailCard - 1 if the initiator's "Get Out of Jail Free" card is offered, -1 if the recipient's is requested, 0 otherwise.
+ * @constructor
+ */
 function Trade(initiator, recipient, money, property, communityChestJailCard, chanceJailCard) {
 	// For each property and get out of jail free cards, 1 means offered, -1 means requested, 0 means neither.
 
+	/**
+	 * Gets the initiator of the trade.
+	 * @returns {Player} The initiator of the trade.
+	 */
 	this.getInitiator = function() {
 		return initiator;
 	};
 
+	/**
+	 * Gets the recipient of the trade.
+	 * @returns {Player} The recipient of the trade.
+	 */
 	this.getRecipient = function() {
 		return recipient;
 	};
 
+	/**
+	 * Gets the status of a property in the trade.
+	 * @param {number} index - The index of the property.
+	 * @returns {number} 1 if offered, -1 if requested, 0 otherwise.
+	 */
 	this.getProperty = function(index) {
 		return property[index];
 	};
 
+	/**
+	 * Gets the amount of money in the trade.
+	 * @returns {number} The amount of money.
+	 */
 	this.getMoney = function() {
 		return money;
 	};
 
+	/**
+	 * Gets the status of the Community Chest "Get Out of Jail Free" card in the trade.
+	 * @returns {number} 1 if offered, -1 if requested, 0 otherwise.
+	 */
 	this.getCommunityChestJailCard = function() {
 		return communityChestJailCard;
 	};
 
+	/**
+	 * Gets the status of the Chance "Get Out of Jail Free" card in the trade.
+	 * @returns {number} 1 if offered, -1 if requested, 0 otherwise.
+	 */
 	this.getChanceJailCard = function() {
 		return chanceJailCard;
 	};
@@ -1177,7 +1281,10 @@ function Trade(initiator, recipient, money, property, communityChestJailCard, ch
 var player = [];
 var pcount;
 var turn = 0, doublecount = 0;
-// Overwrite an array with numbers from one to the array's length in a random order.
+/**
+ * Randomizes the order of the elements in an array.
+ * @param {number} [length] - The number of elements to randomize. Defaults to the array's length.
+ */
 Array.prototype.randomize = function(length) {
 	length = (length || this.length);
 	var num;
@@ -1218,6 +1325,10 @@ Array.prototype.randomize = function(length) {
 	// }
 // }
 
+/**
+ * Adds a message to the alert log.
+ * @param {string} alertText - The text to add to the log.
+ */
 function addAlert(alertText) {
 	$alert = $("#alert");
 
@@ -1231,6 +1342,12 @@ function addAlert(alertText) {
 	}
 }
 
+/**
+ * Displays a popup message.
+ * @param {string} HTML - The HTML content of the popup.
+ * @param {Function|string} [action] - A function to execute when the popup is closed, or a string representing the type of popup.
+ * @param {string} [option] - The type of popup ("yes/no", "blank", or "ok").
+ */
 function popup(HTML, action, option) {
 	document.getElementById("popuptext").innerHTML = HTML;
 	document.getElementById("popup").style.width = "300px";
@@ -1278,6 +1395,9 @@ function popup(HTML, action, option) {
 }
 
 
+/**
+ * Updates the position of the player tokens on the board.
+ */
 function updatePosition() {
 	// Reset borders
 	document.getElementById("jail").style.border = "1px solid black";
@@ -1360,6 +1480,9 @@ function updatePosition() {
 	// }
 }
 
+/**
+ * Updates the money display for all players.
+ */
 function updateMoney() {
 	var p = player[turn];
 
@@ -1392,6 +1515,9 @@ function updateMoney() {
 	}
 }
 
+/**
+ * Updates the dice display.
+ */
 function updateDice() {
 	var die0 = game.getDie(1);
 	var die1 = game.getDie(2);
@@ -1435,6 +1561,9 @@ function updateDice() {
 	}
 }
 
+/**
+ * Updates the display of the current player's owned properties.
+ */
 function updateOwned() {
 	var p = player[turn];
 	var checkedproperty = getCheckedProperty();
@@ -1545,6 +1674,9 @@ function updateOwned() {
 	updateOption();
 }
 
+/**
+ * Updates the options available to the current player based on the selected property.
+ */
 function updateOption() {
 	$("#option").show();
 
@@ -1703,6 +1835,9 @@ function updateOption() {
 	}
 }
 
+/**
+ * Handles landing on a Chance or Community Chest square.
+ */
 function chanceCommunityChest() {
 	var p = player[turn];
 
@@ -1754,6 +1889,10 @@ function chanceCommunityChest() {
 	}
 }
 
+/**
+ * Executes the action of a Chance card.
+ * @param {number} chanceIndex - The index of the Chance card.
+ */
 function chanceAction(chanceIndex) {
 	var p = player[turn]; // This is needed for reference in action() method.
 
@@ -1769,6 +1908,10 @@ function chanceAction(chanceIndex) {
 	}
 }
 
+/**
+ * Executes the action of a Community Chest card.
+ * @param {number} communityChestIndex - The index of the Community Chest card.
+ */
 function communityChestAction(communityChestIndex) {
 	var p = player[turn]; // This is needed for reference in action() method.
 
@@ -1784,6 +1927,11 @@ function communityChestAction(communityChestIndex) {
 	}
 }
 
+/**
+ * Adds a specified amount of money to the current player's balance.
+ * @param {number} amount - The amount of money to add.
+ * @param {string} cause - The reason for the payment.
+ */
 function addamount(amount, cause) {
 	var p = player[turn];
 
@@ -1792,6 +1940,11 @@ function addamount(amount, cause) {
 	addAlert(p.name + " received $" + amount + " from " + cause + ".");
 }
 
+/**
+ * Subtracts a specified amount of money from the current player's balance.
+ * @param {number} amount - The amount of money to subtract.
+ * @param {string} cause - The reason for the payment.
+ */
 function subtractamount(amount, cause) {
 	var p = player[turn];
 
@@ -1800,6 +1953,9 @@ function subtractamount(amount, cause) {
 	addAlert(p.name + " lost $" + amount + " from " + cause + ".");
 }
 
+/**
+ * Sends the current player to jail.
+ */
 function gotojail() {
 	var p = player[turn];
 	addAlert(p.name + " was sent directly to jail.");
@@ -1824,6 +1980,9 @@ function gotojail() {
 	}
 }
 
+/**
+ * Moves the current player back three spaces.
+ */
 function gobackthreespaces() {
 	var p = player[turn];
 
@@ -1832,6 +1991,11 @@ function gobackthreespaces() {
 	land();
 }
 
+/**
+ * Makes the current player pay a specified amount to every other player.
+ * @param {number} amount - The amount to pay each player.
+ * @param {string} cause - The reason for the payment.
+ */
 function payeachplayer(amount, cause) {
 	var p = player[turn];
 	var total = 0;
@@ -1849,6 +2013,11 @@ function payeachplayer(amount, cause) {
 	addAlert(p.name + " lost $" + total + " from " + cause + ".");
 }
 
+/**
+ * Makes every other player pay a specified amount to the current player.
+ * @param {number} amount - The amount to collect from each player.
+ * @param {string} cause - The reason for the payment.
+ */
 function collectfromeachplayer(amount, cause) {
 	var p = player[turn];
 	var total = 0;
@@ -1871,6 +2040,11 @@ function collectfromeachplayer(amount, cause) {
 	addAlert(p.name + " received $" + total + " from " + cause + ".");
 }
 
+/**
+ * Advances the current player to a specified destination on the board.
+ * @param {number} destination - The index of the destination square.
+ * @param {number} [pass] - The index of a square that, if passed, grants the player $200.
+ */
 function advance(destination, pass) {
 	var p = player[turn];
 
@@ -1894,6 +2068,9 @@ function advance(destination, pass) {
 	land();
 }
 
+/**
+ * Advances the current player to the nearest utility.
+ */
 function advanceToNearestUtility() {
 	var p = player[turn];
 
@@ -1910,6 +2087,9 @@ function advanceToNearestUtility() {
 	land(true);
 }
 
+/**
+ * Advances the current player to the nearest railroad.
+ */
 function advanceToNearestRailroad() {
 	var p = player[turn];
 
@@ -1928,6 +2108,11 @@ function advanceToNearestRailroad() {
 	land(true);
 }
 
+/**
+ * Makes the current player pay for street repairs.
+ * @param {number} houseprice - The cost per house.
+ * @param {number} hotelprice - The cost per hotel.
+ */
 function streetrepairs(houseprice, hotelprice) {
 	var cost = 0;
 	for (var i = 0; i < 40; i++) {
@@ -1955,6 +2140,9 @@ function streetrepairs(houseprice, hotelprice) {
 
 }
 
+/**
+ * Makes the current player pay a $50 fine to get out of jail.
+ */
 function payfifty() {
 	var p = player[turn];
 
@@ -1974,6 +2162,9 @@ function payfifty() {
 	updatePosition();
 }
 
+/**
+ * Uses a "Get Out of Jail Free" card.
+ */
 function useJailCard() {
 	var p = player[turn];
 
@@ -2017,6 +2208,11 @@ function useJailCard() {
 	updatePosition();
 }
 
+/**
+ * Buys a house for the specified property.
+ * @param {number} index - The index of the property.
+ * @returns {boolean|undefined} False if the house cannot be bought, otherwise undefined.
+ */
 function buyHouse(index) {
 	var sq = square[index];
 	var p = player[sq.owner];
@@ -2066,6 +2262,10 @@ function buyHouse(index) {
 	}
 }
 
+/**
+ * Sells a house from the specified property.
+ * @param {number} index - The index of the property.
+ */
 function sellHouse(index) {
 	sq = square[index];
 	p = player[sq.owner];
@@ -2084,6 +2284,9 @@ function sellHouse(index) {
 	updateMoney();
 }
 
+/**
+ * Displays the stats window.
+ */
 function showStats() {
 	var HTML, sq, p;
 	var mortgagetext,
@@ -2165,6 +2368,10 @@ function showStats() {
 	});
 }
 
+/**
+ * Shows the deed for a property.
+ * @param {number} property - The index of the property.
+ */
 function showdeed(property) {
 	var sq = square[property];
 	$("#deed").show();
@@ -2209,10 +2416,16 @@ function showdeed(property) {
 	}
 }
 
+/**
+ * Hides the deed display.
+ */
 function hidedeed() {
 	$("#deed").hide();
 }
 
+/**
+ * Buys the property the current player is on.
+ */
 function buy() {
 	var p = player[turn];
 	var property = square[p.position];
@@ -2234,6 +2447,11 @@ function buy() {
 	}
 }
 
+/**
+ * Mortgages a property.
+ * @param {number} index - The index of the property to mortgage.
+ * @returns {boolean} True if the property was mortgaged, false otherwise.
+ */
 function mortgage(index) {
 	var sq = square[index];
 	var p = player[sq.owner];
@@ -2258,6 +2476,11 @@ function mortgage(index) {
 	return true;
 }
 
+/**
+ * Unmortgages a property.
+ * @param {number} index - The index of the property to unmortgage.
+ * @returns {boolean} True if the property was unmortgaged, false otherwise.
+ */
 function unmortgage(index) {
 	var sq = square[index];
 	var p = player[sq.owner];
@@ -2279,6 +2502,10 @@ function unmortgage(index) {
 }
 
 
+/**
+ * Handles the logic for landing on a square.
+ * @param {boolean} [increasedRent=false] - Whether the rent should be increased (used for Chance cards).
+ */
 function land(increasedRent) {
 	increasedRent = !!increasedRent; // Cast increasedRent to a boolean value. It is used for the ADVANCE TO THE NEAREST RAILROAD/UTILITY Chance cards.
 
@@ -2414,6 +2641,9 @@ function land(increasedRent) {
 	}
 }
 
+/**
+ * Rolls the dice and moves the current player.
+ */
 function roll() {
 	var p = player[turn];
 
@@ -2532,6 +2762,9 @@ function roll() {
 	}
 }
 
+/**
+ * Starts the next player's turn.
+ */
 function play() {
 	if (game.auction()) {
 		return;
@@ -2607,6 +2840,9 @@ function play() {
 	}
 }
 
+/**
+ * Sets up the game with the selected number of players and their settings.
+ */
 function setup() {
 	pcount = parseInt(document.getElementById("playernumber").value, 10);
 
@@ -2658,6 +2894,10 @@ function setup() {
 	// }
 // }
 
+/**
+ * Gets the index of the currently checked property.
+ * @returns {number} The index of the checked property, or -1 if none is checked.
+ */
 function getCheckedProperty() {
 	for (var i = 0; i < 42; i++) {
 		if (document.getElementById("propertycheckbox" + i) && document.getElementById("propertycheckbox" + i).checked) {
@@ -2682,6 +2922,9 @@ function getCheckedProperty() {
 	// updateOption();
 // }
 
+/**
+ * Handles the change event for the player number selection.
+ */
 function playernumber_onchange() {
 	pcount = parseInt(document.getElementById("playernumber").value, 10);
 
@@ -2692,16 +2935,27 @@ function playernumber_onchange() {
 	}
 }
 
+/**
+ * Handles the mouseover event for a menu item.
+ * @param {HTMLElement} element - The menu item element.
+ */
 function menuitem_onmouseover(element) {
 	element.className = "menuitem menuitem_hover";
 	return;
 }
 
+/**
+ * Handles the mouseout event for a menu item.
+ * @param {HTMLElement} element - The menu item element.
+ */
 function menuitem_onmouseout(element) {
 	element.className = "menuitem";
 	return;
 }
 
+/**
+ * Initializes the game when the window loads.
+ */
 window.onload = function() {
 	game = new Game();
 
