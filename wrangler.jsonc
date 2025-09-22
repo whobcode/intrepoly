@@ -1,13 +1,13 @@
 {
-  "name": "cloudflare-monopoly",
+  "name": "whobmonopoly",
   "main": "src/index.ts",
   "compatibility_date": "2025-03-07",
   "compatibility_flags": [
     "nodejs_compat"
   ],
   "workers_dev": true,
-  "site": {
-    "bucket": "./public"
+  "assets": {
+    "directory": "public"
   },
   "durable_objects": {
     "bindings": [
@@ -18,15 +18,20 @@
     ]
   },
   "ai": {
-    "bindings": [
-      {
-        "name": "AI",
-        "model": "@cf/meta/llama-2-7b-chat-int8"
-      }
-    ]
+    "binding": "AI"
   },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
-  }
+  },
+  "vars": {
+    "DEFAULT_AI_MODEL": "@cf/meta/llama-2-7b-chat-int8",
+    "ALLOWED_AI_MODELS": "@cf/meta/llama-2-7b-chat-int8,@cf/llama-3-8b-instruct,@cf/mistral/mistral-7b-instruct"
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["Game"]
+    }
+  ]
 }

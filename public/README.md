@@ -1,10 +1,10 @@
-# Monopoly
+# whoBmonopoly
 
-This is a web-based implementation of the classic board game Monopoly. This project includes the original client-side version of the game, as well as a new, server-based version built on Cloudflare Workers.
+This is a modern, server-driven take on the classic board game, built on Cloudflare Workers with a modular ES module client.
 
 ## Table of Contents
 
-- [Monopoly](#monopoly)
+- [whoBmonopoly](#whobmonopoly)
   - [Table of Contents](#table-of-contents)
   - [Project Overview](#project-overview)
   - [Original Client-Side Version](#original-client-side-version)
@@ -16,7 +16,7 @@ This is a web-based implementation of the classic board game Monopoly. This proj
 
 ## Project Overview
 
-This project provides a fully-featured Monopoly game that can be played in a web browser. It includes all the standard features of the game, such as:
+This project provides a playable board game in the browser with:
 
 *   Buying, selling, and trading properties
 *   Building houses and hotels
@@ -27,25 +27,20 @@ This project provides a fully-featured Monopoly game that can be played in a web
 
 The game supports 2-8 players, and players can be either human or computer-controlled.
 
-## Original Client-Side Version
+## Client
 
-The original version of the game is implemented entirely in client-side JavaScript, HTML, and CSS. All game logic and state are managed in the browser.
+The legacy client has been removed. The new client lives under `public/js/` and uses standard ES modules:
 
-### How to Play
+- `js/main.js` — entry point that wires UI to the backend
+- `js/api.js` — WebSocket connection and messaging
+- `js/state.js` — minimal client-side state
+- `js/render.js` — DOM construction and UI updates
 
-1.  Open the `index.html` file in a web browser.
-2.  Select the number of players and configure each player's name, color, and AI status.
-3.  Click "Start Game" to begin.
-
-The game board and controls are displayed on the screen. Players can roll the dice, buy properties, manage their assets, and trade with other players.
-
-## Cloudflare Workers Version
-
-The new version of the game is built on Cloudflare's serverless platform, providing a more robust and scalable architecture.
+## Cloudflare Worker
 
 ### Architecture
 
-The Cloudflare Workers version of the game uses the following resources:
+The app uses the following resources:
 
 *   **Cloudflare Worker**: The main entry point for the application. It serves the static assets (HTML, CSS, and client-side JavaScript) and handles API requests from the client.
 *   **Durable Objects**: Each game instance is managed by a `Game` Durable Object. The Durable Object stores the game state and exposes methods for interacting with the game, ensuring consistency and transactional updates.

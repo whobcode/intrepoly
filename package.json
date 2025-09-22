@@ -1,0 +1,32 @@
+{
+  "name": "whobmonopoly",
+  "version": "0.1.0",
+  "private": true,
+  "description": "whoBmonopoly — Cloudflare Workers edition of the classic board game.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "preview": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "local-ws": "node server/local-ws/index.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "SEE LICENSE IN public/LICENSE",
+  "keywords": [
+    "whobmonopoly",
+    "monopoly",
+    "cloudflare",
+    "workers",
+    "durable-objects",
+    "websocket"
+  ],
+  "packageManager": "npm@10",
+  "dependencies": {
+    "@types/node": "^24.5.2"
+  }
+}

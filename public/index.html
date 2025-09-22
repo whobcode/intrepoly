@@ -1,100 +1,29 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-	<title>Monopoly - Cloudflare Workers Edition</title>
+	<title>whoBmonopoly - Cloudflare Workers Edition</title>
 	<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
 	<link rel="stylesheet" type="text/css" href="styles.css" />
 </head>
 
 <body>
-	<div id="popupbackground"></div>
-	<div id="popupwrap">
-		<div id="popup">
-			<div style="position: relative;">
-				<div id="popuptext"></div>
-				<div id="popupdrag"></div>
-			</div>
-		</div>
-	</div>
+    <!-- legacy popup/stats removed -->
 
-	<div id="statsbackground"></div>
-	<div id="statswrap">
-		<div id="stats">
-			<div style="position: relative;">
-				<img id="statsclose" src="images/close.png" title="Close" alt="x" />
-				<div id="statstext"></div>
-				<div id="statsdrag"></div>
-			</div>
-		</div>
-	</div>
-
-	<p id="noscript">
-		Note: This page will not function without JavaScript.
-	</p>
+	<noscript>
+		<style>
+			#setup, #control, #board, #moneybar, #refresh, #noF5 { display: none !important; }
+			#noscript { margin: 15px 10px; font-family: Arial, sans-serif; }
+		</style>
+		<p id="noscript">Note: This page will not function without JavaScript.</p>
+	</noscript>
 
 	<div id="refresh">
 		Refresh this page to start a new game.
 	</div>
 
-	<div id="deed">
-		<div id="deed-normal" style="display: none;">
-			<div id="deed-header">
-				<div style="margin: 5px; font-size: 11px;">T I T L E&nbsp;&nbsp;D E E D</div>
-				<div id="deed-name"></div>
-			</div>
-			<table id="deed-table">
-				<tr>
-					<td colspan="2">
-						RENT&nbsp;$<span id="deed-baserent">12</span>.
-					</td>
-				</tr>
-				<tr>
-					<td style="text-align: left;">With 1 House</td>
-					<td style="text-align: right;">$&nbsp;&nbsp;&nbsp;<span id="deed-rent1">60</span>.</td>
-				</tr>
-				<tr>
-					<td style="text-align: left;">With 2 Houses</td>
-					<td style="text-align: right;"><span id="deed-rent2">180</span>.</td>
-				</tr>
-				<tr>
-					<td style="text-align: left;">With 3 Houses</td>
-					<td style="text-align: right;"><span id="deed-rent3">500</span>.</td>
-				</tr>
-				<tr>
-					<td style="text-align: left;">With 4 Houses</td>
-					<td style="text-align: right;"><span id="deed-rent4">700</span>.</td>
-				</tr>
-				<tr>
-					<td colspan="2">
-						<div style="margin-bottom: 8px;">With HOTEL $<span id="deed-rent5">900</span>.</div>
-						<div>Mortgage Value $<span id="deed-mortgage">80</span>.</div>
-						<div>Houses cost $<span id="deed-houseprice">100</span>. each</div>
-						<div>Hotels, $<span id="deed-hotelprice">100</span>. plus 4 houses</div>
-						<div style="font-size: 9px; font-style: italic; margin-top: 5px;">If a player owns ALL the Lots of any Color-Group, the rent is Doubled on Unimproved Lots in that group.</div>
-					</td>
-				</tr>
-			</table>
-		</div>
+    <!-- legacy deed section removed -->
 
-		<div id="deed-mortgaged">
-			<div id="deed-mortgaged-name"></div>
-			<p>&bull;</p>
-			<div>MORTGAGED</div>
-			<div> for $<span id="deed-mortgaged-mortgage">80</span></div>
-			<p>&bull;</p>
-			<div style="font-style: italic; font-size: 13px; margin: 10px;">Card must be turned this side up if property is mortgaged</div>
-		</div>
-
-		<div id="deed-special">
-			<div id="deed-special-name"></div>
-			<div id="deed-special-text"></div>
-			<div id="deed-special-footer">
-				Mortgage Value
-				<span style="float: right;">$<span id="deed-special-mortgage">100</span>.</span>
-			</div>
-		</div>
-	</div>
-
+	<div id="boardwrap">
 	<table id="board">
 		<tr>
 			<td class="cell board-corner" id="cell20"></td>
@@ -160,61 +89,62 @@
 			<td class="cell board-corner" id="cell0"></td>
 		</tr>
 	</table>
+	</div>
 
 	<div id="moneybarwrap">
 		<div id="moneybar">
 			<table>
 				<tr id="moneybarrow1" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p1arrow" class="money-bar-arrow" alt=">"/></td>
+					<td class="moneybararrowcell"><svg id="p1arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p1moneybar" class="moneybarcell">
 						<div><span id="p1moneyname" >Player 1</span>:</div>
 						<div>$<span id="p1money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow2" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p2arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p2arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p2moneybar" class="moneybarcell">
 						<div><span id="p2moneyname" >Player 2</span>:</div>
 						<div>$<span id="p2money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow3" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p3arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p3arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p3moneybar" class="moneybarcell">
 						<div><span id="p3moneyname" >Player 3</span>:</div>
 						<div>$<span id="p3money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow4" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p4arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p4arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p4moneybar" class="moneybarcell">
 						<div><span id="p4moneyname" >Player 4</span>:</div>
 						<div>$<span id="p4money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow5" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p5arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p5arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p5moneybar" class="moneybarcell">
 						<div><span id="p5moneyname" >Player 5</span>:</div>
 						<div>$<span id="p5money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow6" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p6arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p6arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p6moneybar" class="moneybarcell">
 						<div><span id="p6moneyname" >Player 6</span>:</div>
 						<div>$<span id="p6money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow7" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p7arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p7arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p7moneybar" class="moneybarcell">
 						<div><span id="p7moneyname" >Player 7</span>:</div>
 						<div>$<span id="p7money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow8" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img src="images/arrow.png" id="p8arrow" class="money-bar-arrow" alt=">" /></td>
+					<td class="moneybararrowcell"><svg id="p8arrow" class="money-bar-arrow" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 12h12l-4-4m4 4l-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></td>
 					<td id="p8moneybar" class="moneybarcell">
 						<div><span id="p8moneyname" >Player 8</span>:</div>
 						<div>$<span id="p8money">1500</span></div>
@@ -223,7 +153,7 @@
 				<tr id="moneybarrowbutton">
 					<td class="moneybararrowcell">&nbsp;</td>
 					<td style="border: none;">
-						<input type="button" id="viewstats" value="View stats" title="View a pop-up window that shows a list of each player's properties." />
+						<input type="button" id="viewlog" value="View Log" title="Show or hide the recent game events." />
 					</td>
 				</tr>
 			</table>
@@ -232,7 +162,7 @@
 
 	<div id="setup">
 		<div style="margin-bottom: 20px;">
-			Welcome to Monopoly! Enter your name and choose a color to start.
+			Welcome to whoBmonopoly! Enter your name and choose a color to start.
 		</div>
 
 		<div id="player1input" class="player-input">
@@ -257,9 +187,17 @@
 			</select>
 		</div>
 
-		<div style="margin: 20px 0px;">
-			<input type="button" value="Start Game" title="Begin playing." />
-		</div>
+        <div style="margin: 12px 0px;">
+            <label for="edition" style="display:block; margin-bottom:6px;">Edition</label>
+            <select id="edition" title="Game edition">
+                <option value="classic" selected>Classic</option>
+                <option value="nyc" disabled>New York City (coming soon)</option>
+            </select>
+        </div>
+
+        <div style="margin: 20px 0px;">
+            <input id="startbutton" type="button" value="Start Game" title="Begin playing." />
+        </div>
 
 		<div id="noF5">Note: Refreshing this page will create a new game session if you're the only one here.</div>
 	</div>
@@ -274,30 +212,12 @@
 								<td class="menu-item" id="buy-menu-item">
 									<a href="javascript:void(0);" title="Buy the property you landed on.">Buy</a>
 								</td>
-								<td class="menu-item" id="manage-menu-item">
-									<a href="javascript:void(0);" title="View, mortgage, and improve your property. ">Manage</a>
-								</td>
-								<td class="menu-item" id="trade-menu-item">
-									<a href="javascript:void(0);" title="Exchange property with other players.">Trade</a>
-								</td>
+                        <!-- pruned manage/trade items -->
 							</tr>
 						</table>
 					</div>
 
-					<div id="buy">
-						<div id="alert"></div>
-						<div id="landed"></div>
-					</div>
-
-					<div id="manage" style="display:none;">
-						<div id="option">
-							<div id="buildings" title="Available buildings"></div>
-							<input type="button" value="Buy house" id="buyhousebutton"/>
-							<input type="button" value="Mortgage" id="mortgagebutton" />
-							<input type="button" value="Sell house" id="sellhousebutton"/>
-						</div>
-						<div id="owned"></div>
-					</div>
+                    <!-- legacy buy/manage panes removed -->
 				</td>
 				<td style="vertical-align: top; border: none;">
 					<div id="quickstats" style="">
@@ -314,45 +234,20 @@
 				<td colspan="2" style="border: none">
 					<div style="padding-top: 8px;">
 						<input type="button" id="nextbutton" title="Roll the dice and move your token accordingly." value="Roll Dice"/>
-						<input type="button" id="resignbutton" title="If you cannot pay your debt then you must resign from the game." value="Resign" />
+                    <!-- resign not implemented in server version for now -->
 					</div>
 				</td>
 			</tr>
 		</table>
 	</div>
 
-	<div id="trade" style="display:none;">
-		<table style="border-spacing: 3px;">
-			<tr>
-				<td class="trade-cell">
-					<div id="trade-leftp-name"></div>
-				</td>
-				<td class="trade-cell">
-					<div id="trade-rightp-name"></div>
-				</td>
-			</tr>
-			<tr>
-				<td class="trade-cell">
-					$&nbsp;<input id="trade-leftp-money" value="0" title="Enter amount to exchange with the other player." />
-				</td>
-				<td class="trade-cell">
-					$&nbsp;<input id="trade-rightp-money" value="0" title="Enter amount to exchange with the other player." />
-				</td>
-			</tr>
-			<tr>
-				<td id="trade-leftp-property" class="trade-cell"></td>
-				<td id="trade-rightp-property" class="trade-cell"></td>
-			</tr>
-			<tr>
-				<td colspan="2" class="trade-cell">
-					<input type="button" id="proposetradebutton" value="Propose Trade" />
-					<input type="button" id="canceltradebutton" value="Cancel Trade" />
-					<input type="button" id="accepttradebutton" value="Accept Trade" />
-					<input type="button" id="rejecttradebutton" value="Reject Trade" />
-				</td>
-			</tr>
-		</table>
-	</div>
-    <script src="client.js" defer></script>
+    <!-- legacy trade section removed -->
+
+    <!-- Event Log -->
+    <div id="eventlog" aria-live="polite" aria-label="Game events">
+        <h3>Events</h3>
+        <ul id="eventlog-list"></ul>
+    </div>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
