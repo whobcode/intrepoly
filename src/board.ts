@@ -1,5 +1,9 @@
 import { Square, Card } from './types';
 
+/**
+ * An array of objects representing the squares on the Monopoly board.
+ * The `id` property is omitted and will be assigned based on the array index.
+ */
 export const squares: Omit<Square, 'id'>[] = [
     { name: "GO", type: 'go', houses: 0, mortgaged: false },
     { name: "Mediterranean Avenue", type: 'property', price: 60, rent: [2, 10, 30, 90, 160, 250], group: 'brown', houseCost: 50, houses: 0, mortgaged: false },
@@ -43,6 +47,10 @@ export const squares: Omit<Square, 'id'>[] = [
     { name: "Boardwalk", type: 'property', price: 400, rent: [50, 200, 600, 1400, 1700, 2000], group: 'dark-blue', houseCost: 200, houses: 0, mortgaged: false },
 ];
 
+/**
+ * An array of objects representing the Community Chest cards.
+ * The `id` and `deck` properties are omitted and will be assigned during game initialization.
+ */
 export const communityChestCards: Omit<Card, 'id' | 'deck'>[] = [
     { text: "Get out of Jail, Free.", action: 'get-out-of-jail-free' },
     { text: "You have won second prize in a beauty contest. Collect $10.", action: 'collect', value: 10 },
@@ -62,6 +70,10 @@ export const communityChestCards: Omit<Card, 'id' | 'deck'>[] = [
     { text: "Go to Jail. Go directly to Jail. Do not pass \"GO\". Do not collect $200.", action: 'go-to-jail' },
 ];
 
+/**
+ * An array of objects representing the Chance cards.
+ * The `id` and `deck` properties are omitted and will be assigned during game initialization.
+ */
 export const chanceCards: Omit<Card, 'id' | 'deck'>[] = [
     { text: "GET OUT OF JAIL FREE.", action: 'get-out-of-jail-free' },
     { text: "Make General Repairs on All Your Property. For each house pay $25. For each hotel $100.", action: 'street-repairs', value: { house: 25, hotel: 100 } },

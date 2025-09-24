@@ -1,7 +1,10 @@
 import { GameState, WebSocketMessage, Player, Square, Card } from './types';
 import { squares as squareData, chanceCards as chanceCardData, communityChestCards as communityChestCardData } from './board';
 
-// Helper function to shuffle an array
+/**
+ * Shuffles an array in place.
+ * @param array The array to shuffle.
+ */
 function shuffle(array: any[]) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -9,6 +12,10 @@ function shuffle(array: any[]) {
   }
 }
 
+/**
+ * The main Game Durable Object class.
+ * This class manages the state and logic for a single game of Monopoly.
+ */
 export class Game implements DurableObject {
   state: DurableObjectState;
   env: Env;
@@ -16,11 +23,20 @@ export class Game implements DurableObject {
   gameState?: GameState;
   playerIds: Map<WebSocket, number> = new Map();
 
+  /**
+   * Creates a new Game instance.
+   * @param state The Durable Object state.
+   * @param env The environment bindings.
+   */
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
   }
 
+  /**
+   * Initializes the game state, either by loading from storage or creating a new game.
+   * @returns A promise that resolves when the game is initialized.
+   */
   async initialize(): Promise<void> {
     this.gameState = await this.state.storage.get<GameState>('gameState');
     if (!this.gameState) {
@@ -50,6 +66,12 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Handles incoming HTTP requests to the Durable Object.
+   * This is used for both WebSocket upgrades and fetching the current game state.
+   * @param request The incoming request.
+   * @returns A promise that resolves to a Response.
+   */
   async fetch(request: Request) {
     if (!this.gameState) {
       await this.initialize();
@@ -78,6 +100,10 @@ export class Game implements DurableObject {
     });
   }
 
+  /**
+   * Handles a new WebSocket session.
+   * @param ws The WebSocket connection.
+   */
   handleSession(ws: WebSocket) {
     this.sessions.push(ws);
 
@@ -117,6 +143,15 @@ export class Game implements DurableObject {
 
   }
 
+  /**
+   * Adds a new player to the game.
+   * @param ws The WebSocket connection of the player.
+   * @param name The name of the player.
+   * @param color The color of the player's token.
+   * @param user The authenticated username, if available.
+   * @param email The authenticated email, if available.
+   * @returns A promise that resolves when the player has been added.
+   */
   async addPlayer(ws: WebSocket, name: string, color: string, user?: string, email?: string): Promise<void> {
     if (!this.gameState) {
         return;
@@ -169,6 +204,11 @@ export class Game implements DurableObject {
     await this.updateAndBroadcast();
   }
 
+  /**
+   * Generates a unique name for a player.
+   * @param base The base name to use.
+   * @returns A unique name.
+   */
   uniqueName(base: string): string {
     if (!this.gameState) return base;
     let name = base;
@@ -180,6 +220,10 @@ export class Game implements DurableObject {
     return name;
   }
 
+  /**
+   * Updates the game state in storage and broadcasts it to all connected clients.
+   * @returns A promise that resolves when the update is complete.
+   */
   async updateAndBroadcast(): Promise<void> {
       if (!this.gameState) return;
       await this.checkEndGame();
@@ -195,6 +239,10 @@ export class Game implements DurableObject {
       this.broadcast({ type: 'GAME_STATE_UPDATE', payload });
   }
 
+  /**
+   * Broadcasts a message to all connected WebSocket sessions.
+   * @param message The message to broadcast.
+   */
   broadcast(message: any) {
     const serializedMessage = JSON.stringify(message);
     this.sessions.forEach((session) => {
@@ -214,6 +262,12 @@ export class Game implements DurableObject {
     });
   }
 
+  /**
+   * Dispatches a game action based on a WebSocket message.
+   * @param playerId The ID of the player performing the action.
+   * @param message The WebSocket message containing the action and payload.
+   * @returns A promise that resolves when the action has been processed.
+   */
   async dispatchAction(playerId: number, message: WebSocketMessage) {
     if (!this.gameState) return;
     const localMode = (this.gameState as any).localMode === true;
@@ -283,6 +337,12 @@ export class Game implements DurableObject {
     await this.updateAndBroadcast();
   }
 
+  /**
+   * Handles an incoming chat message.
+   * @param playerId The ID of the player who sent the message.
+   * @param text The content of the chat message.
+   * @returns A promise that resolves when the message has been processed.
+   */
   async receiveChat(playerId: number, text: string) {
     if (!this.gameState) return;
     const t = String(text || '').trim();
@@ -313,6 +373,10 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Picks an AI player to speak.
+   * @returns An object with the ID, name, and model ID of the AI speaker.
+   */
   private pickAiSpeaker(): { id?: number; name: string; modelId?: string } {
     if (!this.gameState) return { name: 'AI' };
     const npcs = this.gameState.players.filter(p => !p.isHuman);
@@ -323,6 +387,10 @@ export class Game implements DurableObject {
     return { name: 'Table AI' };
   }
 
+  /**
+   * Gets the default AI model from the environment.
+   * @returns The default AI model ID.
+   */
   private defaultModel(): string {
     // Prefer env.DEFAULT_AI_MODEL when available
     try {
@@ -334,6 +402,10 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Generates and broadcasts a witty AI banter message.
+   * @param triggerText The text that triggered the banter.
+   */
   private async aiBanter(triggerText: string) {
     if (!this.gameState || !this.env?.AI) return;
     const speaker = this.pickAiSpeaker();
@@ -378,6 +450,11 @@ export class Game implements DurableObject {
     this.broadcast({ type: 'CHAT_MESSAGE', payload: msg });
   }
 
+  /**
+   * Simulates rolling the dice for a player.
+   * @param playerId The ID of the player rolling the dice.
+   * @returns A promise that resolves when the dice roll and its consequences are handled.
+   */
   async rollDice(playerId: number) {
     if (!this.gameState) return;
 
@@ -428,6 +505,12 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Moves a player on the board.
+   * @param playerId The ID of the player to move.
+   * @param amount The number of squares to move.
+   * @returns A promise that resolves when the player has been moved and the landing action is handled.
+   */
   async movePlayer(playerId: number, amount: number) {
       if (!this.gameState) return;
       const player = this.gameState.players.find(p => p.id === playerId);
@@ -445,6 +528,12 @@ export class Game implements DurableObject {
       await this.landOnSquare(playerId, player.position);
   }
 
+  /**
+   * Handles the action when a player lands on a square.
+   * @param playerId The ID of the player.
+   * @param squareId The ID of the square the player landed on.
+   * @returns A promise that resolves when the landing action is complete.
+   */
   async landOnSquare(playerId: number, squareId: number) {
       if (!this.gameState) return;
       const player = this.gameState.players.find(p => p.id === playerId);
@@ -488,6 +577,13 @@ export class Game implements DurableObject {
       }
   }
 
+  /**
+   * Makes a player pay a certain amount of money.
+   * @param player The player who is paying.
+   * @param amount The amount of money to pay.
+   * @param recipient The player who is receiving the money, if any.
+   * @returns A promise that resolves when the payment is complete.
+   */
   async pay(player: Player, amount: number, recipient?: Player) {
       if (!this.gameState) return;
 
@@ -504,6 +600,10 @@ export class Game implements DurableObject {
       }
   }
 
+  /**
+   * Checks if the game has ended and updates the game state accordingly.
+   * @returns A promise that resolves when the check is complete.
+   */
   async checkEndGame() {
     if (!this.gameState) return;
     if (this.gameState.status === 'finished') return;
@@ -531,6 +631,12 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Makes a player pay rent to the owner of a square.
+   * @param player The player paying rent.
+   * @param square The square on which rent is being paid.
+   * @returns A promise that resolves when the rent is paid.
+   */
   async payRent(player: Player, square: Square) {
     if (!this.gameState || square.ownerId === undefined) return;
 
@@ -554,6 +660,10 @@ export class Game implements DurableObject {
     await this.pay(player, rent, owner);
   }
 
+  /**
+   * Sends a player to jail.
+   * @param playerId The ID of the player to send to jail.
+   */
   goToJail(playerId: number) {
       if (!this.gameState) return;
       const player = this.gameState.players.find(p => p.id === playerId);
@@ -564,6 +674,10 @@ export class Game implements DurableObject {
       player.jailTurns = 0;
   }
 
+  /**
+   * Advances the game to the next player's turn.
+   * @returns A promise that resolves when the turn is advanced.
+   */
   async nextTurn() {
       if (!this.gameState) return;
       this.gameState.currentPlayerId = (this.gameState.currentPlayerId + 1) % this.gameState.players.length;
@@ -577,6 +691,12 @@ export class Game implements DurableObject {
       }
   }
 
+  /**
+   * Draws a card from the specified deck for a player.
+   * @param player The player drawing the card.
+   * @param deckType The type of deck to draw from ('chance' or 'community-chest').
+   * @returns A promise that resolves when the card has been drawn and its action executed.
+   */
   async drawCard(player: Player, deckType: 'chance' | 'community-chest') {
     if (!this.gameState) return;
 
@@ -603,6 +723,13 @@ export class Game implements DurableObject {
     await this.executeCardAction(player, card, deckType);
   }
 
+  /**
+   * Executes the action of a drawn card.
+   * @param player The player who drew the card.
+   * @param card The card that was drawn.
+   * @param deckType The type of deck the card came from.
+   * @returns A promise that resolves when the card's action is complete.
+   */
   async executeCardAction(player: Player, card: Omit<Card, 'id' | 'deck'>, deckType: 'chance' | 'community-chest') {
       if (!this.gameState) return;
 
@@ -644,6 +771,12 @@ export class Game implements DurableObject {
               this.gameState.log.push(`Card action '${card.action}' not yet implemented.`);
       }
   }
+
+  /**
+   * Allows a player to buy the property they are currently on.
+   * @param playerId The ID of the player buying the property.
+   * @returns A promise that resolves when the purchase is complete.
+   */
   async buyProperty(playerId: number) {
     if (!this.gameState) return;
     const player = this.gameState.players.find(p => p.id === playerId);
@@ -662,6 +795,13 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Gives a specified amount of money from one player to another.
+   * @param fromId The ID of the player giving money.
+   * @param toId The ID of the player receiving money.
+   * @param amount The amount of money to transfer.
+   * @returns A promise that resolves when the transfer is complete.
+   */
   async giveMoney(fromId: number, toId: number, amount: number) {
     if (!this.gameState) return;
     amount = Math.max(0, Math.floor(Number(amount) || 0));
@@ -677,6 +817,13 @@ export class Game implements DurableObject {
     this.gameState.log.push(`${from.name} gave $${amount} to ${to.name}.`);
   }
 
+  /**
+   * Transfers a property from one player to another.
+   * @param fromId The ID of the player giving the property.
+   * @param squareId The ID of the square being transferred.
+   * @param toId The ID of the player receiving the property.
+   * @returns A promise that resolves when the transfer is complete.
+   */
   async transferProperty(fromId: number, squareId: number, toId: number) {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
@@ -691,6 +838,12 @@ export class Game implements DurableObject {
     this.gameState.log.push(`${from.name} transferred ${sq.name} to ${to.name}.`);
   }
 
+  /**
+   * Adds one or more non-player characters (NPCs) to the game.
+   * @param count The number of NPCs to add.
+   * @param modelId The AI model to use for these NPCs.
+   * @returns A promise that resolves when the NPCs have been added.
+   */
   async addNpc(count: number, modelId?: string) {
     if (!this.gameState) return;
     for (let i = 0; i < count; i++) {
@@ -714,6 +867,11 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Simulates a turn for an AI player.
+   * @param playerId The ID of the AI player.
+   * @returns A promise that resolves when the AI has taken its turn.
+   */
   async aiTakeTurn(playerId: number) {
     if (!this.gameState) return;
     // Very simple heuristic: roll, buy if can afford, otherwise end turn
@@ -729,6 +887,11 @@ export class Game implements DurableObject {
     // nextTurn is called by rollDice path for non-doubles; nothing else to do here
   }
 
+  /**
+   * Adds local players for hot-seat mode.
+   * @param count The number of local players to add.
+   * @returns A promise that resolves when the players have been added.
+   */
   async addLocalPlayers(count: number) {
     if (!this.gameState) return;
     (this.gameState as any).localMode = true;
@@ -752,6 +915,12 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Builds a house on a property.
+   * @param playerId The ID of the player building the house.
+   * @param squareId The ID of the square to build on.
+   * @returns A promise that resolves when the house is built.
+   */
   async buildHouse(playerId: number, squareId: number) {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
@@ -768,6 +937,12 @@ export class Game implements DurableObject {
     this.gameState.log.push(`${player.name} built on ${sq.name}. (${sq.houses === 5 ? 'Hotel' : 'House ' + sq.houses})`);
   }
 
+  /**
+   * Sells a house from a property.
+   * @param playerId The ID of the player selling the house.
+   * @param squareId The ID of the square to sell from.
+   * @returns A promise that resolves when the house is sold.
+   */
   async sellHouse(playerId: number, squareId: number) {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
@@ -781,6 +956,12 @@ export class Game implements DurableObject {
     this.gameState.log.push(`${player.name} sold building on ${sq.name}.`);
   }
 
+  /**
+   * Mortgages a property.
+   * @param playerId The ID of the player mortgaging the property.
+   * @param squareId The ID of the square to mortgage.
+   * @returns A promise that resolves when the property is mortgaged.
+   */
   async mortgage(playerId: number, squareId: number) {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
@@ -793,6 +974,12 @@ export class Game implements DurableObject {
     this.gameState.log.push(`${player.name} mortgaged ${sq.name} for $${value}.`);
   }
 
+  /**
+   * Unmortgages a property.
+   * @param playerId The ID of the player unmortgaging the property.
+   * @param squareId The ID of the square to unmortgage.
+   * @returns A promise that resolves when the property is unmortgaged.
+   */
   async unmortgage(playerId: number, squareId: number) {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
@@ -806,6 +993,12 @@ export class Game implements DurableObject {
     this.gameState.log.push(`${player.name} unmortgaged ${sq.name} for $${cost}.`);
   }
 
+  /**
+   * Proposes a trade between two players.
+   * @param initiatorId The ID of the player proposing the trade.
+   * @param payload The details of the trade proposal.
+   * @returns A promise that resolves when the trade is proposed.
+   */
   async proposeTrade(initiatorId: number, payload: any) {
     if (!this.gameState) return;
     const recipientId = Number(payload?.recipientId);
@@ -827,6 +1020,11 @@ export class Game implements DurableObject {
     this.gameState.log.push(`Trade proposed by Player ${initiatorId} to Player ${recipientId}.`);
   }
 
+  /**
+   * Accepts a proposed trade.
+   * @param actorId The ID of the player accepting the trade (must be the recipient).
+   * @returns A promise that resolves when the trade is completed.
+   */
   async acceptTrade(actorId: number) {
     if (!this.gameState || !this.gameState.trade) return;
     const t = this.gameState.trade;
@@ -845,6 +1043,11 @@ export class Game implements DurableObject {
     this.gameState.log.push(`Trade completed between ${from.name} and ${to.name}.`);
   }
 
+  /**
+   * Rejects a proposed trade.
+   * @param actorId The ID of the player rejecting the trade (must be the recipient).
+   * @returns A promise that resolves when the trade is rejected.
+   */
   async rejectTrade(actorId: number) {
     if (!this.gameState || !this.gameState.trade) return;
     const t = this.gameState.trade;
@@ -853,6 +1056,11 @@ export class Game implements DurableObject {
     this.gameState.log.push(`Trade rejected.`);
   }
 
+  /**
+   * Starts an auction for a property.
+   * @param squareId The ID of the square to be auctioned.
+   * @returns A promise that resolves when the auction is started.
+   */
   async startAuction(squareId: number) {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
@@ -861,6 +1069,12 @@ export class Game implements DurableObject {
     this.gameState.log.push(`Auction started for ${sq.name}.`);
   }
 
+  /**
+   * Places a bid in an ongoing auction.
+   * @param playerId The ID of the player placing the bid.
+   * @param amount The amount of the bid.
+   * @returns A promise that resolves when the bid is placed.
+   */
   async placeBid(playerId: number, amount: number) {
     if (!this.gameState || !this.gameState.auction) return;
     const bid = Math.max(0, Math.floor(Number(amount) || 0));
@@ -874,6 +1088,10 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Checks if the auction deadline has been reached and resolves the auction.
+   * @returns A promise that resolves when the check is complete.
+   */
   async checkAuctionDeadline() {
     if (!this.gameState || !this.gameState.auction) return;
     const a: any = this.gameState.auction;
@@ -898,6 +1116,10 @@ export class Game implements DurableObject {
     }
   }
 
+  /**
+   * Saves a lightweight snapshot of the game state to the database.
+   * @returns A promise that resolves when the snapshot is saved.
+   */
   async saveSnapshot() {
     // Persist lightweight snapshot for reconnect/analytics
     try {
