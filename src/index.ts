@@ -2,6 +2,10 @@ import { Game } from './game';
 import { signSession, verifySession, setCookie, getCookie, hashPassword, verifyPassword } from './auth';
 import { ensureUserByUsername, initCore, initUi, createUserWithPassword, findUserByEmail, updateUserOnline } from './db';
 
+/**
+ * The main fetch handler for the Cloudflare Worker.
+ * This function routes incoming requests to the appropriate handler.
+ */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -193,6 +197,13 @@ export default {
   },
 };
 
+/**
+ * Handles a request for a game, forwarding it to the correct Durable Object.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @param id The ID of the Durable Object.
+ * @returns A promise that resolves to the response from the Durable Object.
+ */
 async function handleGameRequest(request: Request, env: Env, id: DurableObjectId): Promise<Response> {
     const stub = env.GAME.get(id);
     return await stub.fetch(request);
@@ -201,20 +212,36 @@ async function handleGameRequest(request: Request, env: Env, id: DurableObjectId
 // Re-export the Durable Object class
 export { Game };
 
-// Define the Env interface for bindings
+/**
+ * Defines the environment bindings for the Worker.
+ */
 interface Env {
+  /** The Game Durable Object namespace. */
   GAME: DurableObjectNamespace;
+  /** The AI binding. */
   AI: any;
+  /** The static assets fetcher. */
   ASSETS: Fetcher;
+  /** The Cloudflare Images binding. */
   IMAGES: any;
+  /** The D1 database for core game data. */
   monopolyd1: D1Database;
+  /** The D1 database for UI/lobby data. */
   monopolyui: D1Database;
+  /** The default AI model to use. */
   DEFAULT_AI_MODEL?: string;
+  /** A comma-separated list of allowed AI models. */
   ALLOWED_AI_MODELS?: string;
+  /** The secret key for signing authentication tokens. */
   AUTH_SECRET?: string;
 }
 
-// Helpers
+/**
+ * A helper function to create a JSON response.
+ * @param data The data to serialize as JSON.
+ * @param status The HTTP status code.
+ * @returns A Response object with a JSON body.
+ */
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -222,6 +249,11 @@ function json(data: any, status = 200) {
   });
 }
 
+/**
+ * Safely parses the JSON body of a request.
+ * @param request The incoming request.
+ * @returns A promise that resolves to the parsed JSON object, or undefined if parsing fails.
+ */
 async function safeJson(request: Request): Promise<any | undefined> {
   try {
     return await request.json();
@@ -230,12 +262,22 @@ async function safeJson(request: Request): Promise<any | undefined> {
   }
 }
 
+/**
+ * Gets the list of allowed AI models from the environment.
+ * @param env The environment bindings.
+ * @returns An array of allowed AI model IDs.
+ */
 function getAllowedModels(env: Env): string[] {
   const raw = (env.ALLOWED_AI_MODELS || '').trim();
   if (!raw) return [getDefaultModel(env)];
   return raw.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+/**
+ * Gets the allowed AI models grouped by task.
+ * @param env The environment bindings.
+ * @returns A record mapping task types to arrays of model IDs.
+ */
 function getAllowedModelsByTask(env: Env): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const id of getAllowedModels(env)) {
@@ -245,7 +287,11 @@ function getAllowedModelsByTask(env: Env): Record<string, string[]> {
   return out;
 }
 
-// Heuristic classification by slug patterns; easy to extend
+/**
+ * Classifies an AI model based on its ID string.
+ * @param id The ID of the model.
+ * @returns The classified task type string.
+ */
 function classifyModel(id: string): string {
   const s = id.toLowerCase();
   if (/(stable-diffusion|flux|dreamshaper)/.test(s)) return 'image-generation';
@@ -261,12 +307,24 @@ function classifyModel(id: string): string {
   return 'other';
 }
 
+/**
+ * Gets the default AI model to use.
+ * @param env The environment bindings.
+ * @param allowed An optional array of allowed models to pick from.
+ * @returns The ID of the default model.
+ */
 function getDefaultModel(env: Env, allowed?: string[]): string {
   const fallback = env.DEFAULT_AI_MODEL || '@cf/meta/llama-2-7b-chat-int8';
   if (!allowed || allowed.length === 0) return fallback;
   return allowed.includes(fallback) ? fallback : allowed[0];
 }
 
+/**
+ * Builds a prompt for the AI model, combining a base prompt with optional user input and game state.
+ * @param userPrompt The user's prompt.
+ * @param gameState The current game state.
+ * @returns The full prompt string.
+ */
 function buildPrompt(userPrompt?: string, gameState?: any): string {
   const base = `You are an expert Monopoly strategy assistant. Be concise, avoid hallucinations, and prefer valid actions given rules. If the state is incomplete, state assumptions briefly.`;
   const state = gameState ? `\n\nGame State JSON:\n${JSON.stringify(gameState)}` : '';
@@ -274,7 +332,12 @@ function buildPrompt(userPrompt?: string, gameState?: any): string {
   return `${base}${state}${user}`;
 }
 
-// /img/* handler using Assets + Cloudflare Images binding
+/**
+ * Handles requests for images, applying transformations and caching.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to the image response.
+ */
 async function handleImageRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const file = url.pathname.replace(/^\/img\//, '');
@@ -359,10 +422,20 @@ async function handleImageRequest(request: Request, env: Env): Promise<Response>
   }
 }
 
+/**
+ * A placeholder for any async background tasks that need to be awaited.
+ * @param _req The request object.
+ * @param _res The response object.
+ */
 function ctxWait(_req: Request, _res: Response) {
   // no-op placeholder for any async background tasks if needed later
 }
 
+/**
+ * Gets the dimensions for a given image preset.
+ * @param preset The name of the preset.
+ * @returns An object with the width and/or height, or undefined if the preset is not found.
+ */
 function presetDimensions(preset: string): { width?: number; height?: number } | undefined {
   switch (preset) {
     case 'icon':
@@ -394,6 +467,13 @@ function presetDimensions(preset: string): { width?: number; height?: number } |
   }
 }
 
+/**
+ * Generates a placeholder SVG image.
+ * @param name The name of the missing image.
+ * @param width The width of the placeholder.
+ * @param height The height of the placeholder.
+ * @returns An SVG string.
+ */
 function placeholderSvg(name: string, width: number, height: number): string {
   const safe = name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -411,8 +491,12 @@ function placeholderSvg(name: string, width: number, height: number): string {
 </svg>`;
 }
 
-// Auth handlers (simple cookie session)
-
+/**
+ * Handles user login with a username.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
 async function handleAuthLogin(request: Request, env: Env): Promise<Response> {
   try {
     const body = await request.json<any>();
@@ -434,6 +518,10 @@ async function handleAuthLogin(request: Request, env: Env): Promise<Response> {
   }
 }
 
+/**
+ * Handles user logout.
+ * @returns A promise that resolves to a Response that clears the session cookie.
+ */
 async function handleAuthLogout(): Promise<Response> {
   return new Response(JSON.stringify({ ok: true }), {
     headers: {
@@ -443,6 +531,12 @@ async function handleAuthLogout(): Promise<Response> {
   });
 }
 
+/**
+ * Handles a request to identify the current user.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with the user's information.
+ */
 async function handleAuthWhoAmI(request: Request, env: Env): Promise<Response> {
   const cfEmail = request.headers.get('Cf-Access-Authenticated-User-Email');
   if (cfEmail) {
@@ -470,8 +564,12 @@ async function handleAuthWhoAmI(request: Request, env: Env): Promise<Response> {
   }
 }
 
-// (bypass endpoint removed per request)
-
+/**
+ * Handles user signup.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
 async function handleAuthSignup(request: Request, env: Env): Promise<Response> {
   try {
     const body = await request.json<any>();
@@ -488,6 +586,12 @@ async function handleAuthSignup(request: Request, env: Env): Promise<Response> {
   }
 }
 
+/**
+ * Handles user login with an email and password.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
 async function handleAuthLoginEmail(request: Request, env: Env): Promise<Response> {
   try {
     const body = await request.json<any>();
@@ -509,13 +613,23 @@ async function handleAuthLoginEmail(request: Request, env: Env): Promise<Respons
   }
 }
 
-// Lobby handlers
+/**
+ * Handles a request to list open lobby rooms.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with a list of rooms.
+ */
 async function handleLobbyList(env: Env): Promise<Response> {
   await initUi(env.monopolyui);
   const result = await env.monopolyui.prepare('SELECT id, owner_user, status, created_at, (SELECT COUNT(*) FROM lobby_members m WHERE m.room_id = lobby_rooms.id) AS members FROM lobby_rooms WHERE status="open" ORDER BY created_at DESC LIMIT 50').all();
   return json({ rooms: result.results || [] });
 }
 
+/**
+ * Handles a request to create a new lobby room.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with the new room's ID.
+ */
 async function handleLobbyCreate(request: Request, env: Env): Promise<Response> {
   await initUi(env.monopolyui);
   const id = 'game-' + Math.random().toString(36).slice(2, 10);
@@ -526,6 +640,12 @@ async function handleLobbyCreate(request: Request, env: Env): Promise<Response> 
   return json({ id, gamePath: `/api/game/${id}/websocket` });
 }
 
+/**
+ * Handles a request to join a lobby room.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
 async function handleLobbyJoin(request: Request, env: Env): Promise<Response> {
   await initUi(env.monopolyui);
   const body = await safeJson(request);
@@ -536,6 +656,12 @@ async function handleLobbyJoin(request: Request, env: Env): Promise<Response> {
   return json({ ok: true });
 }
 
+/**
+ * Handles a heartbeat from a user in a lobby room.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
 async function handleLobbyHeartbeat(request: Request, env: Env): Promise<Response> {
   await initUi(env.monopolyui);
   const body = await safeJson(request);
@@ -547,6 +673,11 @@ async function handleLobbyHeartbeat(request: Request, env: Env): Promise<Respons
   return json({ ok: true });
 }
 
+/**
+ * Handles a request to get the most recent game ID.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with the game ID.
+ */
 async function handleRecentGame(env: Env): Promise<Response> {
   try {
     await initCore(env.monopolyd1);

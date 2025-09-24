@@ -1,5 +1,3 @@
-# whoBmonopoly — Agent Guide (Project History, Context, and Completion Plan)
-
 This README is intentionally written like an AGENTS.md: it gives future contributors and AI coding agents rich context on how the project started, how it reached its current architecture, and a concrete, staged plan to finish it into a polished, scalable online multiplayer experience with AI opponents, in‑game chat, and an optional rewards/wagering extension. It also outlines the NYC edition follow‑up.
 
 If you are an agent: follow the conventions and stepwise plan in this document before making large changes. Keep changes small, focused, and reversible.
@@ -211,3 +209,4 @@ If you are an agent: follow the conventions and stepwise plan in this document b
 
 
 That’s the roadmap. Before starting new work, pick the next milestone from “End‑to‑End Plan”, implement surgically, and update the relevant checklist above.
+You should not ask me questions until the task is completed.

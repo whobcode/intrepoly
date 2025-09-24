@@ -1,3 +1,9 @@
+/**
+ * Initializes the core database schema for the application.
+ * This includes tables for users, sessions, and games.
+ * @param monopolyd1 The D1 database instance for core data.
+ * @returns A promise that resolves when the schema is initialized.
+ */
 export async function initCore(monopolyd1: D1Database) {
   const stmts = [
     `CREATE TABLE IF NOT EXISTS users (
@@ -37,6 +43,12 @@ export async function initCore(monopolyd1: D1Database) {
   }
 }
 
+/**
+ * Initializes the UI-related database schema.
+ * This includes tables for lobby rooms and members.
+ * @param monopolyui The D1 database instance for UI data.
+ * @returns A promise that resolves when the schema is initialized.
+ */
 export async function initUi(monopolyui: D1Database) {
   const stmts = [
     `CREATE TABLE IF NOT EXISTS lobby_rooms (
@@ -57,6 +69,13 @@ export async function initUi(monopolyui: D1Database) {
   }
 }
 
+/**
+ * Ensures a user exists in the database with the given username.
+ * If the user does not exist, a new user is created.
+ * @param monopolyd1 The D1 database instance.
+ * @param username The username to ensure.
+ * @returns A promise that resolves to the user object.
+ */
 export async function ensureUserByUsername(monopolyd1: D1Database, username: string) {
   await monopolyd1.prepare('INSERT OR IGNORE INTO users (username, gamer_id) VALUES (?, ?)')
     .bind(username, makeGamerId()).run();
@@ -64,11 +83,25 @@ export async function ensureUserByUsername(monopolyd1: D1Database, username: str
   return row as { id: number; username: string; gamer_id: string } | null;
 }
 
+/**
+ * Finds a user by their email address.
+ * @param monopolyd1 The D1 database instance.
+ * @param email The email address to search for.
+ * @returns A promise that resolves to the user object if found, otherwise null.
+ */
 export async function findUserByEmail(monopolyd1: D1Database, email: string) {
   const row = await monopolyd1.prepare('SELECT * FROM users WHERE email=?').bind(email).first();
   return row as any;
 }
 
+/**
+ * Creates a new user with an email, username, and hashed password.
+ * @param monopolyd1 The D1 database instance.
+ * @param email The user's email address.
+ * @param username The user's username.
+ * @param password_hash The user's hashed password.
+ * @returns A promise that resolves to the newly created user object.
+ */
 export async function createUserWithPassword(monopolyd1: D1Database, email: string, username: string, password_hash: string) {
   await monopolyd1.prepare('INSERT INTO users (email, username, password_hash, gamer_id) VALUES (?, ?, ?, ?)')
     .bind(email, username, password_hash, makeGamerId()).run();
@@ -76,11 +109,22 @@ export async function createUserWithPassword(monopolyd1: D1Database, email: stri
   return row as any;
 }
 
+/**
+ * Updates the online status of a user.
+ * @param monopolyd1 The D1 database instance.
+ * @param username The username of the user to update.
+ * @param online `true` if the user is online, `false` otherwise.
+ * @returns A promise that resolves when the update is complete.
+ */
 export async function updateUserOnline(monopolyd1: D1Database, username: string, online: boolean) {
   await monopolyd1.prepare('UPDATE users SET online=?, updated_at=datetime("now") WHERE username=?')
     .bind(online ? 1 : 0, username).run();
 }
 
+/**
+ * Generates a unique, URL-safe gamer ID.
+ * @returns A unique gamer ID string.
+ */
 function makeGamerId() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   let s = '';
