@@ -60,7 +60,7 @@ export function buildBoard(squares) {
     }
 
     // Icons for special squares (and utilities/railroads)
-    const asset = assetForSquare(s.type);
+    const asset = assetForSquare(s);
     if (asset) {
       const center = document.createElement('div');
       center.className = 'cell-center';
@@ -75,14 +75,18 @@ export function buildBoard(squares) {
   markBoardBuilt();
 }
 
-function assetForSquare(type) {
-  switch (type) {
+function assetForSquare(square) {
+  switch (square.type) {
     case 'go': return 'board_go.svg';
     case 'jail': return 'board_jail.svg';
     case 'free-parking': return 'board_free_parking.svg';
     case 'go-to-jail': return 'board_go_to_jail.svg';
     case 'railroad': return 'board_railroad.svg';
-    case 'utility': return 'board_electric.svg';
+    case 'utility':
+        if (square.name === 'Water Works') {
+            return 'board_water.svg';
+        }
+        return 'board_electric.svg';
     case 'chance': return 'board_chance.svg';
     case 'community-chest': return 'board_community_chest.svg';
     case 'tax': return 'board_tax.svg';
