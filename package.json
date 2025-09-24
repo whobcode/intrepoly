@@ -6,15 +6,28 @@
   "scripts": {
     "dev": "wrangler dev",
     "start": "wrangler dev",
+    "dev:all": "concurrently -n wrangler,ws -c auto \"wrangler dev\" \"node server/local-ws/index.js\"",
     "preview": "wrangler dev --local",
     "deploy": "wrangler deploy",
-    "local-ws": "node server/local-ws/index.js"
+    "local-ws": "node server/local-ws/index.js",
+    "db:core": "wrangler d1 execute monopolyd1 --file db/schema/core.sql",
+    "db:ui": "wrangler d1 execute monopolyui --file db/schema/ui.sql",
+    "db:setup": "npm run db:core && npm run db:ui",
+    "rdb:core": "wrangler d1 execute monopolyd1 --remote --file db/schema/core.sql",
+    "rdb:ui": "wrangler d1 execute monopolyui --remote --file db/schema/ui.sql",
+    "rdb:setup": "npm run rdb:core && npm run rdb:ui",
+    "rdb:reset:core": "wrangler d1 execute monopolyd1 --remote --file db/schema/drop-core.sql && wrangler d1 execute monopolyd1 --remote --file db/schema/core.sql",
+    "rdb:reset:ui": "wrangler d1 execute monopolyui --remote --file db/schema/drop-ui.sql && wrangler d1 execute monopolyui --remote --file db/schema/ui.sql",
+    "rdb:reset": "npm run rdb:reset:core && npm run rdb:reset:ui",
+    "db:setup:local": "wrangler d1 execute monopolyd1 --local --file db/schema/core.sql && wrangler d1 execute monopolyui --local --file db/schema/ui.sql",
+    "db:reset:local": "bash -lc \"find .wrangler/state/v3/d1 -name \"*.sqlite\" -delete 2>/dev/null || true\"; npm run db:setup:local"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "concurrently": "^9.2.1",
+    "wrangler": "^4.39.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "license": "SEE LICENSE IN public/LICENSE",
   "keywords": [
@@ -25,7 +38,7 @@
     "durable-objects",
     "websocket"
   ],
-  "packageManager": "npm@10",
+  "packageManager": "npm@11",
   "dependencies": {
     "@types/node": "^24.5.2"
   }

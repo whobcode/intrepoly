@@ -3,6 +3,7 @@ export const state = {
   ws: null,
   playerId: undefined,
   boardBuilt: false,
+  lastGameState: undefined,
 };
 
 export function setWebSocket(ws) {
@@ -16,4 +17,3 @@ export function setPlayerId(id) {
 export function markBoardBuilt() {
   state.boardBuilt = true;
 }
-

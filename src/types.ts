@@ -11,6 +11,9 @@ export interface Player {
   isHuman: boolean;
   bankrupt: boolean;
   creditor?: number; // Player ID of the creditor
+  user?: string; // authenticated username
+  email?: string; // authenticated email if available
+  modelId?: string; // Workers AI model id (for NPCs)
 }
 
 export interface Square {
@@ -45,6 +48,10 @@ export interface GameState {
   doublesCount: number;
   turn: number;
   log: string[];
+  chat?: { id: string; playerId?: number; name: string; text: string; ts: number }[];
+  chatAiNextTs?: number;
+  status?: 'open' | 'finished';
+  winnerId?: number;
   auction?: {
     squareId: number;
     bids: { playerId: number; amount: number }[];

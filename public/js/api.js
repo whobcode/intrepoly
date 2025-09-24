@@ -1,5 +1,6 @@
 // WebSocket API wrapper
 import { state, setWebSocket, setPlayerId } from './state.js';
+import { appendChatMessage } from './chat.js';
 
 export function gameIdFromHash() {
   let gameId = window.location.hash.substring(1);
@@ -43,6 +44,19 @@ export function connect(gameId, { onWelcome, onState, onError, onClose, onOpen }
         onWelcome && onWelcome(message.payload);
       } else if (message.type === 'GAME_STATE_UPDATE') {
         onState && onState(message.payload);
+        // If state carries chat history, hydrate UI once
+        try {
+          const chat = message.payload?.chat;
+          if (Array.isArray(chat) && chat.length) {
+            window.__chatHydrated ||= false;
+            if (!window.__chatHydrated) {
+              for (const m of chat.slice(-100)) appendChatMessage(m);
+              window.__chatHydrated = true;
+            }
+          }
+        } catch {}
+      } else if (message.type === 'CHAT_MESSAGE') {
+        appendChatMessage(message.payload);
       } else if (message.error) {
         onError && onError(message.error);
       }
@@ -68,6 +82,15 @@ export function send(action, payload = {}) {
   }
 }
 
+export function sendChat(text) {
+  const ws = state.ws;
+  const t = String(text || '').trim();
+  if (!t || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ action: 'chat', payload: { text: t } }));
+}
+
 export function join(name, color, edition = 'classic') {
-  send('join', { name, color, edition });
+  const lowered = (name || '').toString().trim().toLowerCase();
+  const user = window.__user || (lowered === 'whobcode13' ? 'whobcode13' : undefined);
+  send('join', { name, color, edition, user });
 }

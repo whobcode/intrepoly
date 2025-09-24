@@ -25,6 +25,8 @@ export function updateEventLog(gameState, limit = 15) {
   if (!list || !Array.isArray(gameState.log)) return;
   const items = gameState.log.slice(-limit);
   list.innerHTML = items.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+  // cache last state for trade UI
+  try { state.lastGameState = gameState; } catch {}
 }
 
 function escapeHtml(s) {

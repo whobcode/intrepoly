@@ -76,6 +76,7 @@ function createInitialState(gameId) {
     doublesCount: 0,
     turn: 0,
     log: ['Game created! Waiting for players...'],
+    chat: [],
   };
 }
 
@@ -253,25 +254,46 @@ wss.on('connection', (ws, request, gameId) => {
       game.state.players.push(p);
       if (game.state.players.length === 1) game.state.currentPlayerId = p.id;
       ws.send(JSON.stringify({ type: 'WELCOME', payload: { id } }));
+      try { ws._playerId = id; } catch {}
       game.state.log.push(`${name} has joined the game.`);
       broadcast(game, { type: 'GAME_STATE_UPDATE', payload: game.state });
       return;
     }
 
-    const playerId = (msg && msg.playerId) ?? undefined; // client doesn't send this; we infer by turn
+    const actorId = ws._playerId;
     const currentId = game.state.currentPlayerId;
-    // Only allow current player actions (matches Worker behavior)
-    if (currentId === undefined) return;
-    const player = game.state.players.find(p => p.id === currentId);
+    const player = game.state.players.find(p => p.id === actorId);
     if (!player) return;
 
     switch (msg.action) {
       case 'rollDice':
-        rollDice(game, player);
+        if (actorId === currentId) rollDice(game, player);
         break;
       case 'buyProperty':
-        buyProperty(game, player);
+        if (actorId === currentId) buyProperty(game, player);
         break;
+      case 'chat': {
+        const text = String(msg?.payload?.text || '').trim();
+        if (!text) break;
+        const payload = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, playerId: player.id, name: player.name, text: text.slice(0,500), ts: Date.now() };
+        game.state.chat.push(payload);
+        if (game.state.chat.length > 200) game.state.chat = game.state.chat.slice(-200);
+        broadcast(game, { type: 'CHAT_MESSAGE', payload });
+        // simple local banter stub for dev if user types /ai or @ai
+        if (/^\s*\/ai\b|@ai\b/i.test(text)) {
+          const quips = [
+            "Spicy take: buy the damn railroad.",
+            "Risk it. Worst case, you sleep on Baltic.",
+            "That roll was cursed — try again, champ.",
+            "Money talks, mortgaged deeds mumble.",
+            "I’d bid, but I’m just code with taste."
+          ];
+          const ai = { id: `${Date.now()}-ai`, name: 'Table AI', text: quips[Math.floor(Math.random()*quips.length)], ts: Date.now() };
+          game.state.chat.push(ai);
+          broadcast(game, { type: 'CHAT_MESSAGE', payload: ai });
+        }
+        return; // do not send full state broadcast here
+      }
       default:
         break;
     }
@@ -300,8 +322,13 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-const PORT = 9999;
+const PORT = Number(process.env.WS_PORT || process.env.PORT || 9999);
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Set WS_PORT to a free port, e.g. WS_PORT=9901`);
+  }
+  throw err;
+});
 server.listen(PORT, () => {
   console.log(`Local WS server listening on ws://localhost:${PORT}`);
 });
-
