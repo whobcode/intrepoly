@@ -60,9 +60,26 @@ export class Game implements DurableObject {
         dice: [0, 0],
         doublesCount: 0,
         turn: 0,
+        turnState: 'rolling',
         log: ['Game created! Waiting for players...'],
         chat: [],
       };
+    }
+  }
+
+  async alarm() {
+    await this.checkAuctionDeadline();
+  }
+
+  async declineToBuyProperty(playerId: number) {
+    if (!this.gameState) return;
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    const square = this.gameState.squares[player.position];
+    if (this.gameState.turnState === 'LandedOnUnownedProperty' && (square.type === 'property' || square.type === 'railroad' || square.type === 'utility') && square.ownerId === undefined) {
+      this.gameState.log.push(`${player.name} declined to buy ${square.name}. Starting auction.`);
+      await this.startAuction(square.id);
     }
   }
 
@@ -227,7 +244,8 @@ export class Game implements DurableObject {
   async updateAndBroadcast(): Promise<void> {
       if (!this.gameState) return;
       await this.checkEndGame();
-      await this.checkAuctionDeadline();
+      // It's better to let the alarm handle the auction deadline check
+      // await this.checkAuctionDeadline();
       await this.state.storage.put('gameState', this.gameState);
       await this.saveSnapshot();
       const presence = {
@@ -282,7 +300,7 @@ export class Game implements DurableObject {
         if (isTurn) await this.buyProperty(actorId);
         break;
       case 'endTurn':
-        if (isTurn) await this.nextTurn();
+        if (isTurn && this.gameState.turnState === 'ended') await this.nextTurn();
         break;
       case 'giveMoney':
         await this.giveMoney(actorId, message.payload?.toPlayerId, message.payload?.amount);
@@ -329,6 +347,9 @@ export class Game implements DurableObject {
         break;
       case 'placeBid':
         await this.placeBid(actorId, message.payload?.amount);
+        break;
+      case 'declineToBuyProperty':
+        if (isTurn) await this.declineToBuyProperty(actorId);
         break;
       default:
         console.log(`Unknown action: ${message.action}`);
@@ -456,10 +477,12 @@ export class Game implements DurableObject {
    * @returns A promise that resolves when the dice roll and its consequences are handled.
    */
   async rollDice(playerId: number) {
-    if (!this.gameState) return;
+    if (!this.gameState || (this.gameState.turnState !== 'rolling' && this.gameState.turnState !== undefined)) return;
 
     const player = this.gameState.players.find(p => p.id === playerId);
     if (!player) return;
+
+    this.gameState.turnState = 'acting'; // Player is now acting
 
     const die1 = Math.floor(Math.random() * 6) + 1;
     const die2 = Math.floor(Math.random() * 6) + 1;
@@ -473,18 +496,18 @@ export class Game implements DurableObject {
             player.inJail = false;
             this.gameState.log.push(`${player.name} rolled doubles and got out of jail!`);
             await this.movePlayer(playerId, die1 + die2);
+            this.gameState.turnState = 'rolling'; // Got out, can roll again
         } else {
             player.jailTurns++;
             if (player.jailTurns >= 3) {
-                // Force payment to get out
-                player.money -= 50;
+                await this.pay(player, 50);
                 player.inJail = false;
                 this.gameState.log.push(`${player.name} paid $50 to get out of jail.`);
                 await this.movePlayer(playerId, die1 + die2);
             } else {
                 this.gameState.log.push(`${player.name} remains in jail.`);
-                await this.nextTurn();
             }
+            this.gameState.turnState = 'ended'; // Turn ends whether they paid or stayed
         }
     } else { // Not in jail
         if (isDoubles) {
@@ -493,14 +516,18 @@ export class Game implements DurableObject {
                 this.gameState.log.push(`${player.name} rolled doubles three times and is sent to jail!`);
                 this.goToJail(playerId);
                 this.gameState.doublesCount = 0;
-                await this.nextTurn();
+                this.gameState.turnState = 'ended';
             } else {
                 await this.movePlayer(playerId, die1 + die2);
+                this.gameState.turnState = 'rolling'; // Roll again
             }
         } else {
             this.gameState.doublesCount = 0;
             await this.movePlayer(playerId, die1 + die2);
-            await this.nextTurn();
+            // If move didn't trigger a buy/auction, turn is over
+            if (this.gameState.turnState === 'acting') {
+                this.gameState.turnState = 'ended';
+            }
         }
     }
   }
@@ -545,8 +572,8 @@ export class Game implements DurableObject {
           case 'railroad':
           case 'utility':
               if (square.ownerId === undefined) {
+                  this.gameState.turnState = 'LandedOnUnownedProperty';
                   this.gameState.log.push(`${player.name} can buy ${square.name} for $${square.price}.`);
-                  // In a real implementation, we'd wait for a 'buy' action from the client.
               } else if (square.ownerId !== playerId && !square.mortgaged) {
                   await this.payRent(player, square);
               }
@@ -559,7 +586,7 @@ export class Game implements DurableObject {
           case 'go-to-jail':
               this.gameState.log.push(`${player.name} is sent to jail!`);
               this.goToJail(playerId);
-              await this.nextTurn();
+              this.gameState.turnState = 'ended';
               break;
           case 'chance':
               this.gameState.log.push(`${player.name} landed on Chance.`);
@@ -682,6 +709,7 @@ export class Game implements DurableObject {
       if (!this.gameState) return;
       this.gameState.currentPlayerId = (this.gameState.currentPlayerId + 1) % this.gameState.players.length;
       this.gameState.turn++;
+      this.gameState.turnState = 'rolling';
       this.gameState.log.push(`It's now ${this.gameState.players[this.gameState.currentPlayerId].name}'s turn.`);
 
       // If next player is NPC, take a simple automatic turn
@@ -760,7 +788,7 @@ export class Game implements DurableObject {
               break;
           case 'go-to-jail':
               this.goToJail(player.id);
-              await this.nextTurn();
+              this.gameState.turnState = 'ended';
               break;
           case 'get-out-of-jail-free':
               if (deckType === 'chance') player.chanceJailCard = true;
@@ -783,14 +811,15 @@ export class Game implements DurableObject {
     if (!player) return;
 
     const square = this.gameState.squares[player.position];
-    if ((square.type === 'property' || square.type === 'railroad' || square.type === 'utility') && square.ownerId === undefined) {
+    if (this.gameState.turnState === 'LandedOnUnownedProperty' && (square.type === 'property' || square.type === 'railroad' || square.type === 'utility') && square.ownerId === undefined) {
       if (player.money >= (square.price ?? 0)) {
         await this.pay(player, square.price ?? 0);
         square.ownerId = playerId;
         this.gameState.log.push(`${player.name} bought ${square.name} for $${square.price}.`);
+        this.gameState.turnState = 'ended';
       } else {
-        this.gameState.log.push(`${player.name} cannot afford to buy ${square.name}.`);
-        // TODO: Trigger auction
+        this.gameState.log.push(`${player.name} cannot afford to buy ${square.name}. Starting auction.`);
+        await this.startAuction(square.id);
       }
     }
   }
@@ -1065,7 +1094,18 @@ export class Game implements DurableObject {
     if (!this.gameState) return;
     const sq = this.gameState.squares.find(s => s.id === squareId);
     if (!sq || sq.ownerId !== undefined) return;
-    this.gameState.auction = { squareId, bids: [], highestBid: 0, currentPlayerId: 0, endTime: Date.now() + 30000 } as any;
+
+    this.gameState.turnState = 'AuctionInProgress';
+    this.gameState.auction = {
+      squareId: sq.id,
+      propertyToAuction: sq,
+      bids: [],
+      highestBid: 0,
+      highestBidderId: undefined,
+      currentPlayerId: this.gameState.currentPlayerId,
+      endTime: Date.now() + 30000, // 30-second auction
+    };
+    await this.state.storage.setAlarm(this.gameState.auction.endTime);
     this.gameState.log.push(`Auction started for ${sq.name}.`);
   }
 
@@ -1076,16 +1116,26 @@ export class Game implements DurableObject {
    * @returns A promise that resolves when the bid is placed.
    */
   async placeBid(playerId: number, amount: number) {
-    if (!this.gameState || !this.gameState.auction) return;
+    if (!this.gameState || !this.gameState.auction || this.gameState.turnState !== 'AuctionInProgress') return;
+
     const bid = Math.max(0, Math.floor(Number(amount) || 0));
     const player = this.gameState.players.find(p => p.id === playerId);
-    if (!player || player.money < bid) return;
-    this.gameState.auction.bids.push({ playerId, amount: bid });
-    if (bid > this.gameState.auction.highestBid) {
-      this.gameState.auction.highestBid = bid;
-      this.gameState.auction.highestBidderId = playerId;
-      this.gameState.log.push(`${player.name} bid $${bid}.`);
+
+    if (!player || player.money < bid) {
+      // Maybe send an error message to the player? For now, just log and ignore.
+      console.log(`Player ${playerId} cannot afford bid of ${bid}.`);
+      return;
     }
+
+    if (bid <= this.gameState.auction.highestBid) {
+      console.log(`Bid of ${bid} is not higher than current bid of ${this.gameState.auction.highestBid}.`);
+      return;
+    }
+
+    this.gameState.auction.bids.push({ playerId, amount: bid });
+    this.gameState.auction.highestBid = bid;
+    this.gameState.auction.highestBidderId = playerId;
+    this.gameState.log.push(`${player.name} bid $${bid}.`);
   }
 
   /**
@@ -1093,26 +1143,37 @@ export class Game implements DurableObject {
    * @returns A promise that resolves when the check is complete.
    */
   async checkAuctionDeadline() {
-    if (!this.gameState || !this.gameState.auction) return;
-    const a: any = this.gameState.auction;
+    if (!this.gameState || !this.gameState.auction || this.gameState.turnState !== 'AuctionInProgress') return;
+
+    const a = this.gameState.auction;
     if (Date.now() >= (a.endTime || 0)) {
       const sq = this.gameState.squares.find(s => s.id === a.squareId);
-      if (!sq) { this.gameState.auction = undefined; return; }
+      if (!sq) {
+        this.gameState.auction = undefined;
+        this.gameState.turnState = 'ended';
+        return;
+      }
+
       const winnerId = a.highestBidderId;
       const bid = a.highestBid || 0;
-      if (winnerId !== undefined) {
+
+      if (winnerId !== undefined && bid > 0) {
         const winner = this.gameState.players.find(p => p.id === winnerId);
         if (winner && winner.money >= bid) {
           winner.money -= bid;
           sq.ownerId = winnerId;
-          this.gameState.log.push(`${winner.name} won the auction for ${sq.name} at $${bid}.`);
+          this.gameState.log.push(`${winner.name} won the auction for ${sq.name} for $${bid}.`);
         } else {
-          this.gameState.log.push(`Auction for ${sq?.name} ended with no valid winner.`);
+          // This case should ideally not happen with proper bid validation, but as a fallback:
+          this.gameState.log.push(`Auction for ${sq.name} ended but winner ${winner?.name} could not afford bid. Property remains unowned.`);
+          sq.ownerId = undefined;
         }
       } else {
-        this.gameState.log.push(`Auction for ${sq?.name} ended with no bids.`);
+        this.gameState.log.push(`Auction for ${sq.name} ended with no bids. Property remains unowned.`);
       }
+
       this.gameState.auction = undefined;
+      this.gameState.turnState = 'ended';
     }
   }
 
