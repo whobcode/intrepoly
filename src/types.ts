@@ -98,6 +98,8 @@ export interface GameState {
   doublesCount: number;
   /** The current turn number. */
   turn: number;
+  /** The current state of the turn's lifecycle. */
+  turnState?: 'rolling' | 'acting' | 'ended' | 'LandedOnUnownedProperty' | 'AuctionInProgress';
   /** A log of events that have occurred in the game. */
   log: string[];
   /** An array of chat messages. */
@@ -115,6 +117,7 @@ export interface GameState {
     highestBid: number;
     highestBidderId?: number;
     currentPlayerId: number;
+    propertyToAuction?: Square;
   };
   /** The state of the current trade proposal, if any. */
   trade?: {
