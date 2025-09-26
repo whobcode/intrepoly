@@ -12,19 +12,22 @@
     "local-ws": "node server/local-ws/index.js",
     "db:core": "wrangler d1 execute monopolyd1 --file db/schema/core.sql",
     "db:ui": "wrangler d1 execute monopolyui --file db/schema/ui.sql",
-    "db:setup": "npm run db:core && npm run db:ui",
+    "db:app": "wrangler d1 execute DB --file db/schema/app.sql",
+    "db:setup": "npm run db:core && npm run db:ui && npm run db:app",
     "rdb:core": "wrangler d1 execute monopolyd1 --remote --file db/schema/core.sql",
     "rdb:ui": "wrangler d1 execute monopolyui --remote --file db/schema/ui.sql",
-    "rdb:setup": "npm run rdb:core && npm run rdb:ui",
+    "rdb:app": "wrangler d1 execute DB --remote --file db/schema/app.sql",
+    "rdb:setup": "npm run rdb:core && npm run rdb:ui && npm run rdb:app",
     "rdb:reset:core": "wrangler d1 execute monopolyd1 --remote --file db/schema/drop-core.sql && wrangler d1 execute monopolyd1 --remote --file db/schema/core.sql",
     "rdb:reset:ui": "wrangler d1 execute monopolyui --remote --file db/schema/drop-ui.sql && wrangler d1 execute monopolyui --remote --file db/schema/ui.sql",
-    "rdb:reset": "npm run rdb:reset:core && npm run rdb:reset:ui",
-    "db:setup:local": "wrangler d1 execute monopolyd1 --local --file db/schema/core.sql && wrangler d1 execute monopolyui --local --file db/schema/ui.sql",
+    "rdb:reset:app": "wrangler d1 execute DB --remote --file db/schema/drop-app.sql && wrangler d1 execute DB --remote --file db/schema/app.sql",
+    "rdb:reset": "npm run rdb:reset:core && npm run rdb:reset:ui && npm run rdb:reset:app",
+    "db:setup:local": "wrangler d1 execute monopolyd1 --local --file db/schema/core.sql && wrangler d1 execute monopolyui --local --file db/schema/ui.sql && wrangler d1 execute DB --local --file db/schema/app.sql",
     "db:reset:local": "bash -lc \"find .wrangler/state/v3/d1 -name \"*.sqlite\" -delete 2>/dev/null || true\"; npm run db:setup:local"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "wrangler": "^4.39.0"
+    "wrangler": "^4.40.1"
   },
   "engines": {
     "node": ">=22"
