@@ -70,6 +70,61 @@ export async function initUi(monopolyui: D1Database) {
 }
 
 /**
+ * Initializes the analytics/app database schema (binding: DB).
+ * Executes each statement individually to avoid SQL parsing issues.
+ */
+export async function initApp(DB: D1Database) {
+  const stmts = [
+    `PRAGMA foreign_keys = ON;`,
+    `CREATE TABLE IF NOT EXISTS game_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      payload_json TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE (game_id, seq)
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_game_events_game ON game_events (game_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_game_events_created ON game_events (created_at);`,
+    `CREATE TABLE IF NOT EXISTS game_snapshots (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      turn INTEGER NOT NULL,
+      state_json TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE (game_id, turn)
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_game_snapshots_created ON game_snapshots (created_at);`,
+    `CREATE TABLE IF NOT EXISTS bets (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL CHECK (amount >= 0),
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_bets_game ON bets (game_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_bets_user ON bets (user_id);`,
+    `CREATE TABLE IF NOT EXISTS payouts (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_payouts_game ON payouts (game_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_payouts_user ON payouts (user_id);`
+  ];
+  for (const s of stmts) {
+    await DB.exec(s);
+  }
+}
+
+/**
  * Ensures a user exists in the database with the given username.
  * If the user does not exist, a new user is created.
  * @param monopolyd1 The D1 database instance.

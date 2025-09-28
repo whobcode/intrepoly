@@ -1,5 +1,5 @@
-import { GameState, WebSocketMessage, Player, Square, Card } from './types';
-import { squares as squareData, chanceCards as chanceCardData, communityChestCards as communityChestCardData } from './board';
+import { GameState, WebSocketMessage, Player } from './types';
+import { Square, Card, squares as squareData, chanceCards as chanceCardData, communityChestCards as communityChestCardData } from '@whob/monopoly-core';
 
 /**
  * Shuffles an array in place.
@@ -613,18 +613,103 @@ export class Game implements DurableObject {
    */
   async pay(player: Player, amount: number, recipient?: Player) {
       if (!this.gameState) return;
+      amount = Math.max(0, Math.floor(Number(amount) || 0));
+      if (amount === 0) return;
 
-      player.money -= amount;
-
-      if (recipient) {
-          recipient.money += amount;
+      // Fast path: player can cover the payment
+      if (player.money >= amount) {
+        player.money -= amount;
+        if (recipient) recipient.money += amount;
+        return;
       }
 
-      if (player.money < 0) {
-          // TODO: Handle bankruptcy
-          this.gameState.log.push(`${player.name} has gone bankrupt!`);
-          player.bankrupt = true;
+      // Attempt automatic liquidation: sell buildings, then mortgage properties
+      const raise = (needed: number) => {
+        let raised = 0;
+        // 1) Sell all buildings (houseCost/2 per house), hotels count as 5 houses
+        for (const sq of this.gameState!.squares) {
+          if (sq.type === 'property' && sq.ownerId === player.id && (sq.houses || 0) > 0) {
+            const houses = sq.houses || 0;
+            const refund = Math.floor((sq.houseCost || 0) / 2) * houses;
+            if (refund > 0) {
+              player.money += refund;
+              raised += refund;
+              sq.houses = 0;
+              this.gameState!.log.push(`${player.name} sold buildings on ${sq.name} for $${refund}.`);
+              if (player.money >= amount) return raised;
+            }
+          }
+        }
+        // 2) Mortgage any unmortgaged properties
+        for (const sq of this.gameState!.squares) {
+          if ((sq.type === 'property' || sq.type === 'railroad' || sq.type === 'utility') && sq.ownerId === player.id && !sq.mortgaged) {
+            const value = Math.floor((sq.price || 0) / 2);
+            if (value > 0 && (sq.houses || 0) === 0) {
+              player.money += value;
+              raised += value;
+              sq.mortgaged = true;
+              this.gameState!.log.push(`${player.name} mortgaged ${sq.name} for $${value}.`);
+              if (player.money >= amount) return raised;
+            }
+          }
+        }
+        return raised;
+      };
+
+      raise(amount - player.money);
+
+      if (player.money >= amount) {
+        // Now can pay after liquidation
+        player.money -= amount;
+        if (recipient) recipient.money += amount;
+        return;
       }
+
+      // Bankruptcy: transfer assets to recipient or release to bank
+      await this.handleBankruptcy(player, recipient, amount);
+  }
+
+  /**
+   * Handles player bankruptcy: marks bankrupt and transfers/relinquishes assets.
+   * If a recipient is provided (creditor), transfer properties to them; otherwise return to bank.
+   */
+  async handleBankruptcy(player: Player, recipient?: Player, owed?: number) {
+    if (!this.gameState || player.bankrupt) return;
+    const debt = Math.max(0, Math.floor(Number(owed) || 0));
+    const name = player.name;
+
+    // Any partial cash goes to creditor
+    if (recipient && player.money > 0) recipient.money += player.money;
+
+    // Relinquish all properties
+    for (const sq of this.gameState.squares) {
+      if ((sq.type === 'property' || sq.type === 'railroad' || sq.type === 'utility') && sq.ownerId === player.id) {
+        // Buildings should already be sold during liquidation, but ensure clean
+        sq.houses = 0;
+        if (recipient) {
+          sq.ownerId = recipient.id;
+          // Keep mortgage flag as-is; recipient assumes mortgage
+        } else {
+          sq.ownerId = undefined;
+          sq.mortgaged = false;
+        }
+      }
+    }
+
+    // Zero out cash and mark bankrupt
+    player.money = 0;
+    player.bankrupt = true;
+
+    if (recipient) {
+      this.gameState.log.push(`${name} is bankrupt and transfers all assets to ${recipient.name}${debt ? ` (owed $${debt})` : ''}.`);
+    } else {
+      this.gameState.log.push(`${name} is bankrupt and returns all assets to the bank${debt ? ` (owed $${debt})` : ''}.`);
+    }
+
+    // End turn if it was theirs
+    if (this.gameState.players[this.gameState.currentPlayerId]?.id === player.id) {
+      this.gameState.turnState = 'ended';
+    }
   }
 
   /**
@@ -668,7 +753,7 @@ export class Game implements DurableObject {
     if (!this.gameState || square.ownerId === undefined) return;
 
     const owner = this.gameState.players.find(p => p.id === square.ownerId);
-    if (!owner) return;
+    if (!owner || owner.bankrupt) return;
 
     let rent = 0;
     if (square.type === 'property' && square.rent) {
@@ -707,7 +792,14 @@ export class Game implements DurableObject {
    */
   async nextTurn() {
       if (!this.gameState) return;
-      this.gameState.currentPlayerId = (this.gameState.currentPlayerId + 1) % this.gameState.players.length;
+      const n = this.gameState.players.length;
+      let next = (this.gameState.currentPlayerId + 1) % n;
+      let safety = 0;
+      while (this.gameState.players[next]?.bankrupt && safety < n) {
+        next = (next + 1) % n;
+        safety++;
+      }
+      this.gameState.currentPlayerId = next;
       this.gameState.turn++;
       this.gameState.turnState = 'rolling';
       this.gameState.log.push(`It's now ${this.gameState.players[this.gameState.currentPlayerId].name}'s turn.`);

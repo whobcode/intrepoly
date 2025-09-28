@@ -1,0 +1,27 @@
+version: "3.9"
+services:
+  monopoly:
+    build:
+      context: ..
+      dockerfile: containers/Dockerfile
+    environment:
+      - PORT=444
+      # Option A: token-based tunnel (preferred for simplicity)
+      # - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      # Option B: named tunnel (mount credentials + config)
+      - TUNNEL_ID=${TUNNEL_ID:-}
+      - GAME_HOSTNAME=${GAME_HOSTNAME:-game.hwmnbn.me}
+      - AUTH_SECRET=${AUTH_SECRET:-dev-secret-not-for-prod}
+    volumes:
+      # Only needed for named-tunnel mode
+      - ./secrets:/secrets:ro
+      - ./cloudflared.yml:/etc/cloudflared/config.yml:ro
+    # No ports are published when using tunnel; uncomment for direct local access
+    # ports:
+    #   - "444:444"
+    restart: unless-stopped
+
+volumes:
+  # placeholder for future named volumes
+  _data: {}
+

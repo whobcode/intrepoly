@@ -1,0 +1,34 @@
+# Named Cloudflare Tunnel config (template)
+#
+# Steps:
+# 1) Install cloudflared and authenticate: `cloudflared tunnel login`
+# 2) Create a tunnel (stores credentials JSON under ~/.cloudflared):
+#      cloudflared tunnel create monopoly-dev
+#    Copy the printed Tunnel UUID and credentials file path.
+# 3) Copy this file to scripts/cloudflared.named.yml and edit the values below:
+#      cp scripts/cloudflared.named.yml.example scripts/cloudflared.named.yml
+# 4) Replace TUNNEL_ID_HERE and credentials-file path, and set your hostname(s).
+# 5) Point DNS to the tunnel (either via `tunnel route dns` or a CNAME in Cloudflare):
+#      cloudflared tunnel route dns monopoly-dev monopoly-dev.example.com
+# 6) Run the named tunnel with dev:
+#      npm run dev:tunnel:cf:named
+#
+# Notes:
+# - This proxies HTTP and WebSocket traffic on http://127.0.0.1:444
+# - Your Worker dev server is bound to 0.0.0.0:444; 127.0.0.1 works as origin target.
+
+tunnel: TUNNEL_ID_HERE
+credentials-file: /home/YOUR_USER/.cloudflared/TUNNEL_ID_HERE.json
+
+ingress:
+  - hostname: monopoly-dev.example.com
+    service: http://127.0.0.1:444
+    # WebSocket upgrades to /api/game/:id/websocket pass through automatically
+  - service: http_status:404
+
+# Optional origin request tweaks (uncomment if needed)
+# originRequest:
+#   http2Origin: true
+#   keepAliveTimeout: 30s
+#   noTLSVerify: true
+

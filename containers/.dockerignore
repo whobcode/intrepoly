@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log*
+.wrangler
+logs
+containers/secrets
+public/images/cache
+**/*.sqlite
+**/.DS_Store
+

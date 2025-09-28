@@ -1,6 +1,6 @@
 import { Game } from './game';
 import { signSession, verifySession, setCookie, getCookie, hashPassword, verifyPassword } from './auth';
-import { ensureUserByUsername, initCore, initUi, createUserWithPassword, findUserByEmail, updateUserOnline } from './db';
+import { ensureUserByUsername, initCore, initUi, initApp, createUserWithPassword, findUserByEmail, updateUserOnline } from './db';
 
 /**
  * The main fetch handler for the Cloudflare Worker.
@@ -11,20 +11,20 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Regex to match game API routes, e.g., /api/game/some-id/websocket
-    const gameRouteMatch = path.match(/^\/api\/game\/([a-zA-Z0-9-]+)\/.*/);
+    // WebSocket route: forward explicitly to service binding (game-sockets)
+    const wsMatch = path.match(/^\/api\/game\/([a-zA-Z0-9_-]+)\/websocket$/);
+    if (wsMatch && request.headers.get('Upgrade') === 'websocket') {
+      return env.GAME_SOCKETS.fetch(request);
+    }
 
+    // Other game API routes continue to use the Game Durable Object
+    const gameRouteMatch = path.match(/^\/api\/game\/([a-zA-Z0-9-]+)\/.*/);
     if (gameRouteMatch) {
       const gameId = gameRouteMatch[1];
-
-      // Ensure the ID is a valid hex string for a Durable Object ID
       if (!/^[0-9a-f]{64}$/.test(gameId)) {
-          // If not, let's create a new ID based on the name.
-          // This allows for human-readable game URLs.
-          const id = env.GAME.idFromName(gameId);
-          return await handleGameRequest(request, env, id);
+        const id = env.GAME.idFromName(gameId);
+        return await handleGameRequest(request, env, id);
       }
-
       const id = env.GAME.idFromString(gameId);
       return await handleGameRequest(request, env, id);
     }
@@ -74,6 +74,17 @@ export default {
       const def = getDefaultModel(env, allowed);
       const byTask = getAllowedModelsByTask(env);
       return json({ default: def, allowed, byTask });
+    }
+
+    // Admin: initialize D1 schemas (executes statements one-by-one)
+    if (path === '/admin/db/init' && request.method === 'POST') {
+      const key = request.headers.get('x-admin-key') || '';
+      const ok = (env.AUTH_SECRET || 'dev-secret-not-for-prod');
+      if (!key || key !== ok) return json({ error: 'unauthorized' }, 401);
+      await initCore(env.monopolyd1);
+      await initUi(env.monopolyui);
+      await initApp(env.DB);
+      return json({ ok: true });
     }
 
     if (path === '/api/ai/chat' && request.method === 'POST') {
@@ -218,6 +229,8 @@ export { Game };
 interface Env {
   /** The Game Durable Object namespace. */
   GAME: DurableObjectNamespace;
+  /** WebSocket service binding for game rooms. */
+  GAME_SOCKETS: Fetcher;
   /** The AI binding. */
   AI: any;
   /** The static assets fetcher. */

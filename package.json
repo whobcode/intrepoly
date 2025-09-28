@@ -4,12 +4,17 @@
   "private": true,
   "description": "whoBmonopoly — Cloudflare Workers edition of the classic board game.",
   "scripts": {
-    "dev": "wrangler dev",
-    "start": "wrangler dev",
-    "dev:all": "concurrently -n wrangler,ws -c auto \"wrangler dev\" \"node server/local-ws/index.js\"",
-    "preview": "wrangler dev --local",
+    "dev": "wrangler dev --local --host 0.0.0.0 --port 444",
+    "start": "wrangler dev --local --host 0.0.0.0 --port 444",
+    "dev:with-init": "concurrently -n wrangler,init -c auto \"wrangler dev --local --host 0.0.0.0 --port 444\" \"node scripts/wait-and-init.mjs --url http://127.0.0.1:444\"",
+    "dev:tunnel:auto": "concurrently -n wrangler,init,tunnel -c auto \"wrangler dev --local --host 0.0.0.0 --port 444\" \"node scripts/wait-and-init.mjs --url http://127.0.0.1:444\" \"node scripts/postdev.mjs --provider=auto --port 444\"",
+    "dev:tunnel:cf": "concurrently -n wrangler,init,tunnel -c auto \"wrangler dev --local --host 0.0.0.0 --port 444\" \"node scripts/wait-and-init.mjs --url http://127.0.0.1:444\" \"node scripts/postdev.mjs --provider=cloudflare --port 444\"",
+    "dev:tunnel:cf:named": "concurrently -n wrangler,init,tunnel -c auto \"wrangler dev --local --host 0.0.0.0 --port 444\" \"node scripts/wait-and-init.mjs --url http://127.0.0.1:444\" \"cloudflared tunnel --config scripts/cloudflared.named.yml run\"",
+    "dev:tunnel:ngrok": "concurrently -n wrangler,init,tunnel -c auto \"wrangler dev --local --host 0.0.0.0 --port 444\" \"node scripts/wait-and-init.mjs --url http://127.0.0.1:444\" \"node scripts/postdev.mjs --provider=ngrok --port 444\"",
+    "dev:tunnel:lt": "concurrently -n wrangler,init,tunnel -c auto \"wrangler dev --local --host 0.0.0.0 --port 444\" \"node scripts/wait-and-init.mjs --url http://127.0.0.1:444\" \"node scripts/postdev.mjs --provider=localtunnel --port 444\"",
+    "preview": "wrangler dev --local --host 0.0.0.0 --port 444",
     "deploy": "wrangler deploy",
-    "local-ws": "node server/local-ws/index.js",
+    "deploy:with-init": "wrangler deploy && node scripts/init-db.mjs --url ${INIT_URL:-https://monopoly.hwmnbn.me}",
     "db:core": "wrangler d1 execute monopolyd1 --file db/schema/core.sql",
     "db:ui": "wrangler d1 execute monopolyui --file db/schema/ui.sql",
     "db:app": "wrangler d1 execute DB --file db/schema/app.sql",
@@ -27,7 +32,10 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "wrangler": "^4.40.1"
+    "localtunnel": "^2.0.2",
+    "ngrok": "^5.0.0-beta.2",
+    "wrangler": "^4.40.2",
+    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=22"
@@ -43,6 +51,7 @@
   ],
   "packageManager": "npm@11",
   "dependencies": {
-    "@types/node": "^24.5.2"
+    "@types/node": "^24.5.2",
+    "@whob/monopoly-core": "*"
   }
 }

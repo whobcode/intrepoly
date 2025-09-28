@@ -2,10 +2,14 @@
 	"name": "whobmonopoly",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-07",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-    "workers_dev": false,
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "dev": { "port": 444 },
+  "services": [
+    { "binding": "GAME_SOCKETS", "service": "game-sockets" }
+  ],
 	"images": {
 		"binding": "IMAGES"
 	},

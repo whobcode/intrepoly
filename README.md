@@ -2,6 +2,37 @@ This README is intentionally written like an AGENTS.md: it gives future contribu
 
 If you are an agent: follow the conventions and stepwise plan in this document before making large changes. Keep changes small, focused, and reversible.
 
+Cloudflare Notes
+- Worker runtime: Cloudflare Workers with Durable Objects for game logic and a separate WebSocket Worker bound via Service Bindings.
+- Custom domain: routes in `wrangler.jsonc` map `monopoly.hwmnbn.me` to the Worker. All public traffic terminates on HTTPS 443 at Cloudflare.
+- Dev server: binds to `0.0.0.0:444` so it can be exposed outside your LAN via a tunnel.
+- WebSockets: `/api/game/:id/websocket` is forwarded by this Worker to the `game-sockets` service binding.
+
+Run Locally (with auto DB init)
+- Prereqs: Node 22+, run `npm i`.
+- Start dev on `0.0.0.0:444` with DB auto-init once ready:
+  - `npm run dev:with-init`
+- Start dev + tunnel (choose one; all auto-init DB):
+  - Auto-pick: `npm run dev:tunnel:auto` (prefers cloudflared > ngrok > localtunnel)
+  - Cloudflare Tunnel: `npm run dev:tunnel:cf` (requires `cloudflared` in PATH)
+  - ngrok: `npm run dev:tunnel:ngrok` (requires ngrok devDependency and token)
+  - localtunnel: `npm run dev:tunnel:lt` (pure Node fallback)
+
+Deploy + Auto DB Init
+- Publish and then initialize D1 schemas via HTTP:
+  - `INIT_URL=https://monopoly.hwmnbn.me npm run deploy:with-init`
+- If `INIT_URL` is omitted, the script attempts to infer a custom-domain route from `wrangler.jsonc`.
+
+Images
+- Board icons are requested as `/img/<asset>?preset=icon&format=auto`.
+- The Worker maps to `/public/images/<asset>` and uses the `IMAGES` binding for format/resize + caching.
+- Assets present: `board_go.svg`, `board_jail.svg`, `board_free_parking.svg`, `board_go_to_jail.svg`, `board_chance.svg`, `board_community_chest.svg`, `board_railroad.svg`, `board_electric.svg`, `board_water.svg`, `board_tax.svg`.
+
+Troubleshooting
+- Roll Dice disabled: click Start to join first; server sends `WELCOME { id }` only after join completes; then your Roll button enables on your turn.
+- DB init errors: `/admin/db/init` executes schema statements one-by-one to avoid multi-statement parsing issues.
+- Tunnel not found: install `cloudflared` (recommended) or rely on ngrok/localtunnel fallback via `dev:tunnel:auto`.
+
 
 **Table of Contents**
 - Project Beginnings
@@ -200,6 +231,40 @@ If you are an agent: follow the conventions and stepwise plan in this document b
 - Secrets: set `AUTH_SECRET` via `wrangler secret put AUTH_SECRET`; do not keep real secrets in config.
 
 
+**Cloudflare Containers + Tunnel (game.hwmnbn.me)**
+- Goal: run the Worker locally inside a container (`wrangler dev --local`) and expose it publicly via Cloudflare Tunnel at `game.hwmnbn.me`. Works for both local Docker and Cloudflare Containers.
+
+- Base image: uses `kalilinux/kali-rolling` (closest to your Kali ISO in container form; ISO files can’t be used directly as container images).
+
+- Files added under `containers/`:
+  - `Dockerfile` — node:22 base, installs `cloudflared`, runs wrangler dev on `PORT` (default 444), then launches the tunnel.
+  - `start.sh` — supervises wrangler dev, waits for `/auth/whoami`, then starts `cloudflared` (token or named tunnel).
+  - `cloudflared.yml` — example named‑tunnel config mapping `game.hwmnbn.me` → `http://127.0.0.1:${PORT}`.
+  - `docker-compose.yml` — local convenience; supports token mode or named‑tunnel mode.
+
+- Two ways to run the tunnel:
+  1) Token mode (simplest)
+     - Create tunnel in Zero Trust → Access → Tunnels → `Create Tunnel` → `Cloudflared` → copy `Tunnel Token`.
+     - Local compose: `TUNNEL_TOKEN=*** docker compose -f containers/docker-compose.yml up --build`.
+     - Cloudflare Containers: set an env var `TUNNEL_TOKEN` on the container. No volume mounts needed.
+
+  2) Named tunnel (DNS managed + credentials file)
+     - `cloudflared tunnel login && cloudflared tunnel create monopoly-game` on your workstation.
+     - Copy the generated credentials JSON into `containers/secrets/credentials.json` (do NOT commit).
+     - Edit `containers/cloudflared.yml`: set `tunnel:` UUID and `hostname: game.hwmnbn.me`.
+     - Local compose: `docker compose -f containers/docker-compose.yml up --build`.
+     - Cloudflare Containers: mount the credentials JSON at `/secrets/credentials.json` and mount a config at `/etc/cloudflared/config.yml` (use runtime secrets/volumes).
+
+- DNS
+  - In the Tunnels UI (Named), add a public hostname `game.hwmnbn.me` → `https://localhost:444` (the edge will reach the container by tunnel). In Token mode, specify the hostname during setup or via `cloudflared` flags; this repo uses `?ws=` override for client if needed.
+
+- Notes
+  - This repo’s client picks its WS base from page origin by default. When you front it with a tunnel, the WS endpoint is `wss://game.hwmnbn.me/api/game/:id/websocket` (the Worker dev server handles HTTP and WS). You can override with `?ws=...` or `localStorage.WS_ORIGIN`.
+  - Set `AUTH_SECRET` in the container environment (see compose file). For production, rotate it and store as a secret.
+  - You can also run the separate `server/local-ws/` instead of the DO WS by opening the page as `https://game.hwmnbn.me/?ws=ws://127.0.0.1:9999` during local experiments.
+
+
+
 **Coding Conventions for Agents**
 - Keep server authoritative: never trust client state; accept intents only.
 - Small PRs: one feature or fix at a time; update this README plan if scope changes.
@@ -210,3 +275,15 @@ If you are an agent: follow the conventions and stepwise plan in this document b
 
 That’s the roadmap. Before starting new work, pick the next milestone from “End‑to‑End Plan”, implement surgically, and update the relevant checklist above.
 You should not ask me questions until the task is completed.
+Named Cloudflare Tunnel (template)
+- Create a named tunnel and copy its UUID and credentials path:
+  - `cloudflared tunnel login`
+  - `cloudflared tunnel create monopoly-dev`
+- Copy and fill the template:
+  - `cp scripts/cloudflared.named.yml.example scripts/cloudflared.named.yml`
+  - Set `tunnel: <UUID>` and `credentials-file: ~/.cloudflared/<UUID>.json`
+  - Set your `hostname` under `ingress` (must exist in your Cloudflare zone)
+- Route DNS to the tunnel (automated):
+  - `cloudflared tunnel route dns monopoly-dev monopoly-dev.example.com`
+- Run dev with the named tunnel:
+  - `npm run dev:tunnel:cf:named`

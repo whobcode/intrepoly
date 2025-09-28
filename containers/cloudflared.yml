@@ -1,0 +1,21 @@
+# Example named tunnel config for cloudflared
+# Replace values or mount your own config at /etc/cloudflared/config.yml
+
+# The tunnel UUID (not the name). Set via env or bake here.
+tunnel: ${TUNNEL_ID}
+
+# This path must point to the JSON credentials for the tunnel
+credentials-file: /secrets/credentials.json
+
+ingress:
+  # Hostname on your Cloudflare DNS zone
+  - hostname: ${GAME_HOSTNAME:-game.hwmnbn.me}
+    service: http://127.0.0.1:${PORT}
+    originRequest:
+      http2Origin: true
+      noTLSVerify: true
+  # Fallback
+  - service: http_status:404
+
+metrics: localhost:0
+
