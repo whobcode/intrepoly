@@ -5,13 +5,13 @@ export function renderDice(dice) {
   if (dieEl0) {
     dieEl0.style.display = 'block';
     dieEl0.classList.remove('die-no-img');
-    dieEl0.innerHTML = d0 ? `<img src="/img/Die_${d0}.png?preset=die&format=auto" alt="Die ${d0} — game die face" title="Die showing ${d0}" width="40" height="40"/>` : '';
+    dieEl0.innerHTML = d0 ? `<img src="https://raw.githubusercontent.com/whobcode/intrepimages/main/dice/Die_${d0}.png" alt="Die ${d0} — game die face" title="Die showing ${d0}" width="40" height="40"/>` : '';
     dieEl0.title = d0 ? `Die (${d0} spots)` : 'Die';
   }
   if (dieEl1) {
     dieEl1.style.display = 'block';
     dieEl1.classList.remove('die-no-img');
-    dieEl1.innerHTML = d1 ? `<img src="/img/Die_${d1}.png?preset=die&format=auto" alt="Die ${d1} — game die face" title="Die showing ${d1}" width="40" height="40"/>` : '';
+    dieEl1.innerHTML = d1 ? `<img src="https://raw.githubusercontent.com/whobcode/intrepimages/main/dice/Die_${d1}.png" alt="Die ${d1} — game die face" title="Die showing ${d1}" width="40" height="40"/>` : '';
     dieEl1.title = d1 ? `Die (${d1} spots)` : 'Die';
   }
 }

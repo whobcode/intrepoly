@@ -57,6 +57,11 @@ export function connect(gameId, { onWelcome, onState, onError, onClose, onOpen }
         } catch {}
       } else if (message.type === 'CHAT_MESSAGE') {
         appendChatMessage(message.payload);
+      } else if (message.type === 'PEER_JOINED' || message.type === 'PEER_LEFT' ||
+                 message.type === 'WEBRTC_OFFER' || message.type === 'WEBRTC_ANSWER' ||
+                 message.type === 'WEBRTC_ICE') {
+        // WebRTC signaling messages - pass entire message
+        onState && onState(message);
       } else if (message.error) {
         onError && onError(message.error);
       }

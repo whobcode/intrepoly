@@ -231,15 +231,15 @@ Troubleshooting
 - Secrets: set `AUTH_SECRET` via `wrangler secret put AUTH_SECRET`; do not keep real secrets in config.
 
 
-**Cloudflare Containers + Tunnel (game.hwmnbn.me)**
-- Goal: run the Worker locally inside a container (`wrangler dev --local`) and expose it publicly via Cloudflare Tunnel at `game.hwmnbn.me`. Works for both local Docker and Cloudflare Containers.
+**Cloudflare Containers + Tunnel (intrepoly.hwmnbn.me)**
+- Goal: run the Worker locally inside a container (`wrangler dev --local`) and expose it publicly via Cloudflare Tunnel at `intrepoly.hwmnbn.me`. Works for both local Docker and Cloudflare Containers.
 
 - Base image: uses `kalilinux/kali-rolling` (closest to your Kali ISO in container form; ISO files can’t be used directly as container images).
 
 - Files added under `containers/`:
   - `Dockerfile` — node:22 base, installs `cloudflared`, runs wrangler dev on `PORT` (default 444), then launches the tunnel.
   - `start.sh` — supervises wrangler dev, waits for `/auth/whoami`, then starts `cloudflared` (token or named tunnel).
-  - `cloudflared.yml` — example named‑tunnel config mapping `game.hwmnbn.me` → `http://127.0.0.1:${PORT}`.
+  - `cloudflared.yml` — example named‑tunnel config mapping `intrepoly.hwmnbn.me` → `http://127.0.0.1:${PORT}`.
   - `docker-compose.yml` — local convenience; supports token mode or named‑tunnel mode.
 
 - Two ways to run the tunnel:
@@ -251,17 +251,17 @@ Troubleshooting
   2) Named tunnel (DNS managed + credentials file)
      - `cloudflared tunnel login && cloudflared tunnel create monopoly-game` on your workstation.
      - Copy the generated credentials JSON into `containers/secrets/credentials.json` (do NOT commit).
-     - Edit `containers/cloudflared.yml`: set `tunnel:` UUID and `hostname: game.hwmnbn.me`.
+     - Edit `containers/cloudflared.yml`: set `tunnel:` UUID and `hostname: intrepoly.hwmnbn.me`.
      - Local compose: `docker compose -f containers/docker-compose.yml up --build`.
      - Cloudflare Containers: mount the credentials JSON at `/secrets/credentials.json` and mount a config at `/etc/cloudflared/config.yml` (use runtime secrets/volumes).
 
 - DNS
-  - In the Tunnels UI (Named), add a public hostname `game.hwmnbn.me` → `https://localhost:444` (the edge will reach the container by tunnel). In Token mode, specify the hostname during setup or via `cloudflared` flags; this repo uses `?ws=` override for client if needed.
+  - In the Tunnels UI (Named), add a public hostname `intrepoly.hwmnbn.me` → `https://localhost:444` (the edge will reach the container by tunnel). In Token mode, specify the hostname during setup or via `cloudflared` flags; this repo uses `?ws=` override for client if needed.
 
 - Notes
-  - This repo’s client picks its WS base from page origin by default. When you front it with a tunnel, the WS endpoint is `wss://game.hwmnbn.me/api/game/:id/websocket` (the Worker dev server handles HTTP and WS). You can override with `?ws=...` or `localStorage.WS_ORIGIN`.
+  - This repo’s client picks its WS base from page origin by default. When you front it with a tunnel, the WS endpoint is `wss://intrepoly.hwmnbn.me/api/game/:id/websocket` (the Worker dev server handles HTTP and WS). You can override with `?ws=...` or `localStorage.WS_ORIGIN`.
   - Set `AUTH_SECRET` in the container environment (see compose file). For production, rotate it and store as a secret.
-  - You can also run the separate `server/local-ws/` instead of the DO WS by opening the page as `https://game.hwmnbn.me/?ws=ws://127.0.0.1:9999` during local experiments.
+  - You can also run the separate `server/local-ws/` instead of the DO WS by opening the page as `https://intrepoly.hwmnbn.me/?ws=ws://127.0.0.1:9999` during local experiments.
 
 
 

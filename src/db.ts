@@ -39,7 +39,12 @@ export async function initCore(monopolyd1: D1Database) {
     );`
   ];
   for (const s of stmts) {
-    await monopolyd1.exec(s);
+    try {
+      await monopolyd1.prepare(s).run();
+    } catch (e) {
+      // Ignore errors for tables that already exist
+      console.log('initCore statement skipped:', e);
+    }
   }
 }
 
@@ -65,7 +70,11 @@ export async function initUi(monopolyui: D1Database) {
     );`
   ];
   for (const s of stmts) {
-    await monopolyui.exec(s);
+    try {
+      await monopolyui.prepare(s).run();
+    } catch (e) {
+      console.log('initUi statement skipped:', e);
+    }
   }
 }
 
@@ -120,7 +129,11 @@ export async function initApp(DB: D1Database) {
     `CREATE INDEX IF NOT EXISTS idx_payouts_user ON payouts (user_id);`
   ];
   for (const s of stmts) {
-    await DB.exec(s);
+    try {
+      await DB.prepare(s).run();
+    } catch (e) {
+      console.log('initApp statement skipped:', e);
+    }
   }
 }
 

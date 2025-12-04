@@ -1,1 +1,1 @@
-export { squares, chanceCards, communityChestCards } from '@whob/monopoly-core';
+export { squares, chanceCards, communityChestCards } from './board-data';

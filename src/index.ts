@@ -3,6 +3,23 @@ import { signSession, verifySession, setCookie, getCookie, hashPassword, verifyP
 import { ensureUserByUsername, initCore, initUi, initApp, createUserWithPassword, findUserByEmail, updateUserOnline } from './db';
 
 /**
+ * Available Ollama models for AI-powered game assistance.
+ */
+const OLLAMA_MODELS = [
+  { id: 'deepseek-v3.1:671b-cloud', name: 'DeepSeek V3.1 (671B)', type: 'text' },
+  { id: 'gpt-oss:120b-cloud', name: 'GPT-OSS (120B)', type: 'text' },
+  { id: 'qwen3-vl:235b-instruct-cloud', name: 'Qwen3 VL Instruct (235B)', type: 'vision' },
+  { id: 'qwen3-vl:235b-cloud', name: 'Qwen3 VL (235B)', type: 'vision' },
+  { id: 'qwen3-coder:480b-cloud', name: 'Qwen3 Coder (480B)', type: 'text' },
+  { id: 'glm-4.6:cloud', name: 'GLM 4.6', type: 'text' },
+  { id: 'minimax-m2:cloud', name: 'MiniMax M2', type: 'text' },
+  { id: 'gemini-3-pro-preview:latest', name: 'Gemini 3 Pro Preview', type: 'vision' },
+  { id: 'kimi-k2-thinking:cloud', name: 'Kimi K2 Thinking', type: 'text' },
+  { id: 'cogito-2.1:671b-cloud', name: 'Cogito 2.1 (671B)', type: 'text' },
+  { id: 'kimi-k2:1t-cloud', name: 'Kimi K2 (1T)', type: 'text' }
+];
+
+/**
  * The main fetch handler for the Cloudflare Worker.
  * This function routes incoming requests to the appropriate handler.
  */
@@ -66,6 +83,35 @@ export default {
     }
     if (path === '/api/games/recent' && request.method === 'GET') {
       return handleRecentGame(env);
+    }
+
+    // Ollama AI endpoints
+    if (path === '/api/ollama/models' && request.method === 'GET') {
+      const defaultModel = env.OLLAMA_MODEL || 'deepseek-v3.1:671b-cloud';
+      return json({ models: OLLAMA_MODELS, default: defaultModel });
+    }
+
+    if (path === '/api/ollama/chat' && request.method === 'POST') {
+      const body = await safeJson(request);
+      const model = body?.model || env.OLLAMA_MODEL || 'deepseek-v3.1:671b-cloud';
+      const prompt = body?.prompt || body?.message;
+
+      if (!prompt) {
+        return json({ error: 'prompt or message required' }, 400);
+      }
+
+      // Validate model is in the allowed list
+      const validModel = OLLAMA_MODELS.find(m => m.id === model);
+      if (!validModel) {
+        return json({ error: 'Invalid model', allowed: OLLAMA_MODELS.map(m => m.id) }, 400);
+      }
+
+      try {
+        const result = await callOllama(env, model, prompt, body?.gameState);
+        return json({ model, response: result, success: true });
+      } catch (e: any) {
+        return json({ error: 'Ollama API call failed', details: e?.message ?? String(e) }, 500);
+      }
     }
 
     // AI endpoints
@@ -247,6 +293,14 @@ interface Env {
   ALLOWED_AI_MODELS?: string;
   /** The secret key for signing authentication tokens. */
   AUTH_SECRET?: string;
+  /** The D1 database for application data. */
+  DB?: D1Database;
+  /** The Ollama API host URL. */
+  OLLAMA_HOST?: string;
+  /** The Ollama API key (secret). */
+  OLLAMA_API_KEY?: string;
+  /** The default Ollama model to use. */
+  OLLAMA_MODEL?: string;
 }
 
 /**
@@ -343,6 +397,55 @@ function buildPrompt(userPrompt?: string, gameState?: any): string {
   const state = gameState ? `\n\nGame State JSON:\n${JSON.stringify(gameState)}` : '';
   const user = userPrompt ? `\n\nUser: ${userPrompt}` : '';
   return `${base}${state}${user}`;
+}
+
+/**
+ * Calls the Ollama Cloud API with a given model and prompt.
+ * @param env The environment bindings.
+ * @param model The Ollama model ID to use.
+ * @param prompt The user's prompt.
+ * @param gameState Optional game state context.
+ * @returns The AI response text.
+ */
+async function callOllama(env: Env, model: string, prompt: string, gameState?: any): Promise<string> {
+  const host = env.OLLAMA_HOST || 'https://ollama.com';
+  const apiKey = env.OLLAMA_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('OLLAMA_API_KEY not configured. Please set it using: npx wrangler secret put OLLAMA_API_KEY');
+  }
+
+  const fullPrompt = buildPrompt(prompt, gameState);
+
+  const response = await fetch(`${host}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful AI assistant for Monopoly game strategy. Be concise and practical.'
+        },
+        {
+          role: 'user',
+          content: fullPrompt
+        }
+      ],
+      stream: false
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Ollama API error (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return data.message?.content || data.response || '';
 }
 
 /**

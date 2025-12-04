@@ -3,10 +3,32 @@
 <head>
 	<title>whoBmonopoly - Cloudflare Workers Edition</title>
 	<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 	<link rel="stylesheet" type="text/css" href="styles.css" />
 </head>
 
-<body>
+<body class="theme-brg">
+    <!-- AI Toolbar -->
+    <div id="ai-toolbar" style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #d9b24a;position:fixed;top:50px;left:0;right:0;background:#151515;z-index:1000;font-family:Arial,sans-serif;color:#e6c36a;height:50px;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <strong>Ollama AI</strong>:
+            <select id="ollamaModelSelect" style="padding:4px 8px;"></select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <input id="aiPromptInput" type="text" placeholder="Ask AI for strategy advice..." style="width:400px;padding:4px 8px;" />
+            <button id="aiAskBtn">Ask AI</button>
+        </div>
+        <div id="aiStatus" style="font-size:12px;color:#b08f3b;"></div>
+    </div>
+
+    <!-- AI Response Popup -->
+    <div id="ai-response-popup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#151515;border:2px solid #d9b24a;border-radius:8px;padding:20px;max-width:600px;width:90%;z-index:2000;color:#e6c36a;">
+        <h3 style="margin-top:0;color:#e6c36a;">AI Response</h3>
+        <div id="ai-response-content" style="margin:16px 0;line-height:1.6;white-space:pre-wrap;"></div>
+        <button id="ai-response-close" style="padding:6px 16px;">Close</button>
+    </div>
+    <div id="ai-response-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1999;"></div>
+
     <!-- legacy popup/stats removed -->
 
 	<noscript>
@@ -95,56 +117,56 @@
 		<div id="moneybar">
 			<table>
 				<tr id="moneybarrow1" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p1arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 1" title="Turn indicator arrow for Player 1"/></td>
+					<td class="moneybararrowcell"><img id="p1arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 1" title="Turn indicator arrow for Player 1"/></td>
 					<td id="p1moneybar" class="moneybarcell">
 						<div><span id="p1moneyname" >Player 1</span>:</div>
 						<div>$<span id="p1money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow2" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p2arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 2" title="Turn indicator arrow for Player 2"/></td>
+					<td class="moneybararrowcell"><img id="p2arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 2" title="Turn indicator arrow for Player 2"/></td>
 					<td id="p2moneybar" class="moneybarcell">
 						<div><span id="p2moneyname" >Player 2</span>:</div>
 						<div>$<span id="p2money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow3" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p3arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 3" title="Turn indicator arrow for Player 3"/></td>
+					<td class="moneybararrowcell"><img id="p3arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 3" title="Turn indicator arrow for Player 3"/></td>
 					<td id="p3moneybar" class="moneybarcell">
 						<div><span id="p3moneyname" >Player 3</span>:</div>
 						<div>$<span id="p3money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow4" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p4arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 4" title="Turn indicator arrow for Player 4"/></td>
+					<td class="moneybararrowcell"><img id="p4arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 4" title="Turn indicator arrow for Player 4"/></td>
 					<td id="p4moneybar" class="moneybarcell">
 						<div><span id="p4moneyname" >Player 4</span>:</div>
 						<div>$<span id="p4money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow5" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p5arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 5" title="Turn indicator arrow for Player 5"/></td>
+					<td class="moneybararrowcell"><img id="p5arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 5" title="Turn indicator arrow for Player 5"/></td>
 					<td id="p5moneybar" class="moneybarcell">
 						<div><span id="p5moneyname" >Player 5</span>:</div>
 						<div>$<span id="p5money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow6" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p6arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 6" title="Turn indicator arrow for Player 6"/></td>
+					<td class="moneybararrowcell"><img id="p6arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 6" title="Turn indicator arrow for Player 6"/></td>
 					<td id="p6moneybar" class="moneybarcell">
 						<div><span id="p6moneyname" >Player 6</span>:</div>
 						<div>$<span id="p6money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow7" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p7arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 7" title="Turn indicator arrow for Player 7"/></td>
+					<td class="moneybararrowcell"><img id="p7arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 7" title="Turn indicator arrow for Player 7"/></td>
 					<td id="p7moneybar" class="moneybarcell">
 						<div><span id="p7moneyname" >Player 7</span>:</div>
 						<div>$<span id="p7money">1500</span></div>
 					</td>
 				</tr>
 				<tr id="moneybarrow8" class="money-bar-row" style="display:none;">
-					<td class="moneybararrowcell"><img id="p8arrow" class="money-bar-arrow" src="/img/arrow.png?preset=arrow&format=auto" alt="Turn indicator arrow for Player 8" title="Turn indicator arrow for Player 8"/></td>
+					<td class="moneybararrowcell"><img id="p8arrow" class="money-bar-arrow" src="https://raw.githubusercontent.com/whobcode/intrepimages/main/icons/arrow.png" alt="Turn indicator arrow for Player 8" title="Turn indicator arrow for Player 8"/></td>
 					<td id="p8moneybar" class="moneybarcell">
 						<div><span id="p8moneyname" >Player 8</span>:</div>
 						<div>$<span id="p8money">1500</span></div>
@@ -303,19 +325,14 @@
       </div>
     </div>
     <script type="module" src="js/main.js"></script>
-    <script type="module" src="js/ai-settings.js"></script>
     <script type="module" src="js/chat.js"></script>
+    <script type="module" src="js/ollama-ai.js"></script>
+    <script type="module" src="js/board-logo.js"></script>
     <!-- Top bar with auth and share -->
     <div id="topbar" style="position:fixed; top:8px; left:8px; right:8px; display:flex; justify-content:space-between; align-items:center; z-index:1000; gap:12px;">
       <div>
         <a href="/lobby.html" id="lobbylink" title="Open lobby" style="margin-right:8px;">Lobby</a>
         <button id="sharelink" title="Copy invite link">Copy Invite Link</button>
-      </div>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <label for="aiTask" style="font-size:12px; color:#555;">Task</label>
-        <select id="aiTask" title="AI task" style="max-width:160px;"></select>
-        <label for="aiModel" style="font-size:12px; color:#555;">Model</label>
-        <select id="aiModel" title="AI model" style="max-width:360px;"></select>
       </div>
       <div>
         <span id="authstatus" style="margin-right:8px;">Signed out</span>
@@ -393,11 +410,143 @@
         </form>
       </div>
     </div>
+
+    <!-- Video Chat Panel -->
+    <div id="video-panel" style="display:none; position:fixed; top:60px; right:12px; width:360px; background:#1a1a1a; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow:hidden; z-index:998;">
+      <div style="padding:12px; background:#2a2a2a; border-bottom:1px solid #3a3a3a;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <h3 style="margin:0; color:#fff; font-size:14px;">Video Chat</h3>
+          <button id="minimize-video-btn" style="background:transparent; border:none; color:#999; cursor:pointer; font-size:18px;" title="Minimize">_</button>
+        </div>
+        <div id="video-controls" style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button id="toggle-video-btn" class="btn-video" title="Join or leave video chat">Join Video</button>
+          <button id="toggle-audio-btn" class="btn-video" disabled title="Mute/unmute microphone">Mute Mic</button>
+          <button id="toggle-camera-btn" class="btn-video" disabled title="Turn camera on/off">Camera Off</button>
+          <button id="share-screen-btn" class="btn-video" disabled title="Share your screen">Share Screen</button>
+        </div>
+      </div>
+      <div id="video-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:8px; padding:12px; max-height:400px; overflow-y:auto;">
+        <!-- Video elements will be dynamically added here -->
+      </div>
+    </div>
+
     <style>
       #chat[data-collapsed="1"] #chat-body { display:none; }
       .chat-item { font-size: 13px; line-height: 1.35; }
       .chat-time { color:#999; margin-right:4px; }
       .chat-name { font-weight:600; margin-right:4px; }
+
+      /* Video Chat Styles */
+      .btn-video {
+        background: #4a5568;
+        color: #fff;
+        border: none;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+
+      .btn-video:hover:not(:disabled) {
+        background: #5a6578;
+        transform: translateY(-1px);
+      }
+
+      .btn-video:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-video.active {
+        background: #48bb78;
+      }
+
+      .btn-video.active:hover {
+        background: #38a169;
+      }
+
+      .btn-video.danger {
+        background: #f56565;
+      }
+
+      .btn-video.danger:hover {
+        background: #e53e3e;
+      }
+
+      .video-wrapper {
+        position: relative;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        aspect-ratio: 4/3;
+      }
+
+      .video-wrapper video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .video-label {
+        position: absolute;
+        bottom: 6px;
+        left: 6px;
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      .video-wrapper.muted-video::after {
+        content: '📷';
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        font-size: 16px;
+      }
+
+      .video-wrapper.muted-audio::before {
+        content: '🔇';
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        font-size: 16px;
+      }
+
+      /* Mobile responsive video */
+      @media (max-width: 768px) {
+        #video-panel {
+          width: calc(100% - 24px);
+          right: 12px;
+          left: 12px;
+        }
+
+        #video-grid {
+          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          max-height: 300px;
+        }
+
+        .btn-video {
+          flex: 1 1 calc(50% - 3px);
+          min-width: 0;
+        }
+      }
+
+      @media (max-width: 480px) {
+        #video-panel {
+          top: 50px;
+        }
+
+        #video-grid {
+          grid-template-columns: 1fr;
+          max-height: 250px;
+        }
+      }
     </style>
 </body>
 </html>

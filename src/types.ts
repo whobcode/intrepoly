@@ -1,1 +1,1 @@
-export * from '@whob/monopoly-core';
+export * from './board-data';

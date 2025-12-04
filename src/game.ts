@@ -1,5 +1,5 @@
 import { GameState, WebSocketMessage, Player } from './types';
-import { Square, Card, squares as squareData, chanceCards as chanceCardData, communityChestCards as communityChestCardData } from '@whob/monopoly-core';
+import { Square, Card, squares as squareData, chanceCards as chanceCardData, communityChestCards as communityChestCardData } from './board-data';
 
 /**
  * Shuffles an array in place.
@@ -351,11 +351,117 @@ export class Game implements DurableObject {
       case 'declineToBuyProperty':
         if (isTurn) await this.declineToBuyProperty(actorId);
         break;
+      // WebRTC Video Chat signaling
+      case 'video-ready':
+        this.handleVideoReady(playerId);
+        return;
+      case 'video-stopped':
+        this.handleVideoStopped(playerId);
+        return;
+      case 'webrtc-offer':
+        this.relayWebRTCMessage('WEBRTC_OFFER', playerId, message.payload);
+        return;
+      case 'webrtc-answer':
+        this.relayWebRTCMessage('WEBRTC_ANSWER', playerId, message.payload);
+        return;
+      case 'webrtc-ice':
+        this.relayWebRTCMessage('WEBRTC_ICE', playerId, message.payload);
+        return;
       default:
         console.log(`Unknown action: ${message.action}`);
     }
 
     await this.updateAndBroadcast();
+  }
+
+  /**
+   * Handles when a player signals they're ready for video chat.
+   * @param playerId The ID of the player who is ready.
+   */
+  handleVideoReady(playerId: number) {
+    if (!this.gameState) return;
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    // Broadcast to all other players that this player joined video
+    this.broadcastToOthers({
+      type: 'PEER_JOINED',
+      payload: {
+        playerId: player.id,
+        playerName: player.name
+      }
+    }, playerId);
+  }
+
+  /**
+   * Handles when a player stops their video chat.
+   * @param playerId The ID of the player who stopped.
+   */
+  handleVideoStopped(playerId: number) {
+    if (!this.gameState) return;
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    // Broadcast to all other players that this player left video
+    this.broadcastToOthers({
+      type: 'PEER_LEFT',
+      payload: {
+        playerId: player.id,
+        playerName: player.name
+      }
+    }, playerId);
+  }
+
+  /**
+   * Relays WebRTC signaling messages between peers.
+   * @param type The type of WebRTC message.
+   * @param fromPlayerId The ID of the sender.
+   * @param payload The message payload.
+   */
+  relayWebRTCMessage(type: string, fromPlayerId: number, payload: any) {
+    if (!this.gameState) return;
+    const fromPlayer = this.gameState.players.find(p => p.id === fromPlayerId);
+    if (!fromPlayer) return;
+
+    const targetPlayerId = payload.targetPlayerId;
+    const targetWs = Array.from(this.playerIds.entries())
+      .find(([, pid]) => pid === targetPlayerId)?.[0];
+
+    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+      try {
+        targetWs.send(JSON.stringify({
+          type,
+          payload: {
+            fromPlayerId: fromPlayer.id,
+            fromPlayerName: fromPlayer.name,
+            ...payload
+          }
+        }));
+      } catch (err) {
+        console.error('Error relaying WebRTC message:', err);
+      }
+    }
+  }
+
+  /**
+   * Broadcasts a message to all players except the excluded one.
+   * @param message The message to broadcast.
+   * @param excludePlayerId Player ID to exclude from broadcast.
+   */
+  broadcastToOthers(message: any, excludePlayerId: number) {
+    const serializedMessage = JSON.stringify(message);
+    this.sessions.forEach((session) => {
+      try {
+        if (session.readyState === WebSocket.OPEN) {
+          const sessionPlayerId = this.playerIds.get(session);
+          if (sessionPlayerId !== excludePlayerId) {
+            session.send(serializedMessage);
+          }
+        }
+      } catch (err) {
+        console.error('Error broadcasting message to session:', err);
+      }
+    });
   }
 
   /**

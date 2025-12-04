@@ -65,7 +65,7 @@ export function buildBoard(squares) {
       const center = document.createElement('div');
       center.className = 'cell-center';
       const img = document.createElement('img');
-      img.src = `/img/${asset}?preset=icon&format=auto`;
+      img.src = `https://raw.githubusercontent.com/whobcode/intrepimages/main/board/${asset}`;
       img.alt = `${s.name} — board square icon`;
       img.title = `Board icon for ${s.name}`;
       center.appendChild(img);

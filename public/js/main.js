@@ -8,6 +8,8 @@ import { initChatUI } from './chat.js';
 import { renderDice } from './dice.js';
 import { rollDice, buyProperty } from './actions.js';
 import { whoAmI, login, logout } from './auth.js';
+import { initVideoChat, handleWebRTCMessage } from './video-chat.js';
+import { initBoardLogoCycling } from './board-logo.js';
 
 // Expose state for debugging
 window.__state = state;
@@ -84,6 +86,11 @@ function onState(gameState) {
   // cache
   window.__state.lastGameState = gameState;
 
+  // Handle WebRTC messages
+  if (gameState.type && gameState.type.startsWith('PEER_') || gameState.type && gameState.type.startsWith('WEBRTC_')) {
+    handleWebRTCMessage(gameState);
+  }
+
   // Live trade UI updates if modal open
   const tradeModal = document.getElementById('trademodal');
   if (tradeModal && tradeModal.style.display !== 'none') {
@@ -155,6 +162,8 @@ async function startGame() {
   setWebSocket(ws);
   // Show the board/controls immediately after clicking Start
   showGame();
+  // Initialize board logo cycling
+  initBoardLogoCycling();
   // Show connecting only after Start Game is clicked
   showStatus('Connecting…');
 }
@@ -274,6 +283,8 @@ async function refreshAuth() {
 window.addEventListener('DOMContentLoaded', async () => {
   await refreshAuth();
   initChatUI();
+  initVideoChat();
+
   const loginBtn = document.getElementById('loginbtn');
   const logoutBtn = document.getElementById('logoutbtn');
   const loginSubmit = document.getElementById('loginsubmit');
@@ -281,6 +292,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   const signupBtn = document.getElementById('signupbtn');
   const loginEmailBtn = document.getElementById('loginemailbtn');
   const shareBtn = document.getElementById('sharelink');
+  const minimizeVideoBtn = document.getElementById('minimize-video-btn');
+
   if (loginBtn) loginBtn.onclick = openLogin;
   if (logoutBtn) logoutBtn.onclick = async () => { await logout(); await refreshAuth(); };
   if (loginSubmit) loginSubmit.onclick = async () => {
@@ -303,6 +316,27 @@ window.addEventListener('DOMContentLoaded', async () => {
     const url = window.location.href;
     try { await navigator.clipboard.writeText(url); showStatus('Invite link copied.'); setTimeout(hideStatus, 1200);} catch {}
   };
+
+  // Video panel minimize toggle
+  if (minimizeVideoBtn) {
+    minimizeVideoBtn.onclick = () => {
+      const videoPanel = document.getElementById('video-panel');
+      const videoGrid = document.getElementById('video-grid');
+      const videoControls = document.getElementById('video-controls');
+
+      if (videoGrid.style.display === 'none') {
+        videoGrid.style.display = 'grid';
+        videoControls.style.display = 'flex';
+        minimizeVideoBtn.textContent = '_';
+        minimizeVideoBtn.title = 'Minimize';
+      } else {
+        videoGrid.style.display = 'none';
+        videoControls.style.display = 'none';
+        minimizeVideoBtn.textContent = '□';
+        minimizeVideoBtn.title = 'Restore';
+      }
+    };
+  }
 });
 
 // Trade UI
@@ -382,5 +416,80 @@ function refreshTradeModal(gs) {
     rejectBtn.style.display = 'none';
   }
 }
+
+// Mobile responsive functionality
+function initMobileResponsiveness() {
+  const moneybarwrap = document.getElementById('moneybarwrap');
+  const boardwrap = document.getElementById('boardwrap');
+  const control = document.getElementById('control');
+
+  // Check if we're on mobile
+  function isMobile() {
+    return window.innerWidth <= 767;
+  }
+
+  // Toggle player list visibility on mobile
+  function togglePlayerList() {
+    if (isMobile() && moneybarwrap) {
+      moneybarwrap.classList.toggle('show-mobile');
+    }
+  }
+
+  // Create toggle button for player list on mobile
+  function createMobileToggle() {
+    if (isMobile() && !document.getElementById('toggle-players')) {
+      const toggleBtn = document.createElement('button');
+      toggleBtn.id = 'toggle-players';
+      toggleBtn.textContent = '👥';
+      toggleBtn.title = 'Toggle player list';
+      toggleBtn.style.display = 'block';
+      toggleBtn.addEventListener('click', togglePlayerList);
+      document.body.appendChild(toggleBtn);
+    } else if (!isMobile() && document.getElementById('toggle-players')) {
+      document.getElementById('toggle-players').remove();
+      if (moneybarwrap) {
+        moneybarwrap.classList.remove('show-mobile');
+      }
+    }
+  }
+
+  // Adjust control button sizing on mobile
+  function adjustControlButtons() {
+    const buttons = document.querySelectorAll('.control-button');
+    if (isMobile()) {
+      buttons.forEach(btn => {
+        btn.style.flex = '0 0 auto';
+        btn.style.minWidth = '60px';
+      });
+    }
+  }
+
+  // Handle viewport changes
+  window.addEventListener('resize', () => {
+    createMobileToggle();
+    adjustControlButtons();
+  });
+
+  // Initial setup
+  createMobileToggle();
+  adjustControlButtons();
+
+  // Close player list when clicking elsewhere on mobile
+  document.addEventListener('click', (e) => {
+    if (isMobile() && moneybarwrap && moneybarwrap.classList.contains('show-mobile')) {
+      if (!moneybarwrap.contains(e.target) && !e.target.matches('#toggle-players') && !e.target.closest('#toggle-players')) {
+        moneybarwrap.classList.remove('show-mobile');
+      }
+    }
+  });
+}
+
+// Initialize mobile responsiveness after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMobileResponsiveness);
+} else {
+  initMobileResponsiveness();
+}
+
 // Keep WebSocket alive
 setInterval(() => { try { send('ping'); } catch {} }, 30000);
