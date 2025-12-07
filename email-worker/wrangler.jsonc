@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "hwmnbn-email-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Environment variables
+  "vars": {
+    "FORWARD_TO": "tru@hwmnbn.me"
+  },
+
+  // KV namespace for rate limiting
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT",
+      "id": "YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // D1 database for email logs
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "email_logs",
+      "database_id": "YOUR_D1_DATABASE_ID"
+    }
+  ],
+
+  // Email routing - this Worker will receive emails
+  // Configure these routes in Cloudflare Dashboard > Email Routing > Email Workers
+  // Routes to configure:
+  //   - noreply@hwmnbn.me -> hwmnbn-email-worker
+  //   - signin@hwmnbn.me -> hwmnbn-email-worker
+  //   - signup@hwmnbn.me -> hwmnbn-email-worker
+  //   - support@hwmnbn.me -> hwmnbn-email-worker
+  //   - info@hwmnbn.me -> hwmnbn-email-worker
+  //   - contact@hwmnbn.me -> hwmnbn-email-worker
+  //   - *@hwmnbn.me (catch-all) -> hwmnbn-email-worker
+}

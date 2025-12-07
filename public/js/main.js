@@ -1,7 +1,7 @@
 // Entry point
 import { gameIdFromHash, connect, join, send } from './api.js';
 import { state, setWebSocket } from './state.js';
-import { showGame } from './ui.js';
+import { showGame, hideGame, updateGameStats } from './ui.js';
 import { buildBoard, updateOwners, updateTokens } from './board.js';
 import { updateMoneybar, updateQuickStats, updateEventLog } from './hud.js';
 import { initChatUI } from './chat.js';
@@ -57,20 +57,8 @@ function onOpen() {
 function onWelcome(payload) {
   // payload.id is stored in state by api.js; nothing extra here.
   hideStatus(); // connected
-  // Add CPU players requested at setup
-  const aiCountEl = document.getElementById('aiCount');
-  const aiCount = aiCountEl ? parseInt(aiCountEl.value || '0', 10) : 0;
-  if (aiCount > 0) {
-    const getModel = window.getSelectedAiModel ? window.getSelectedAiModel() : undefined;
-    const modelId = typeof getModel === 'string' ? getModel : undefined;
-    send('addNPC', { count: aiCount, modelId });
-  }
-  // Add local extra humans requested at setup (beyond Player 1)
-  const localCountEl = document.getElementById('localCount');
-  const localCount = localCountEl ? parseInt(localCountEl.value || '1', 10) : 1;
-  if (localCount > 1) {
-    send('addLocalPlayers', { count: localCount - 1 });
-  }
+  // AI agents will be auto-filled by the server when the game starts
+  // No manual AI/local count selection needed anymore
 }
 
 function onState(gameState) {
@@ -83,6 +71,7 @@ function onState(gameState) {
   updateOwners(gameState);
   updateTokens(gameState);
   updateEventLog(gameState);
+  updateGameStats(gameState);
   // cache
   window.__state.lastGameState = gameState;
 
@@ -172,14 +161,11 @@ if (startButton) startButton.onclick = startGame;
 
 if (rollDiceBtn) rollDiceBtn.onclick = rollDice;
 
-// Hide not-yet-implemented items
-const manageItem = document.getElementById('manage-menu-item');
-const tradeItem = document.getElementById('trade-menu-item');
-if (manageItem) manageItem.style.display = 'none';
-if (tradeItem) { tradeItem.style.display = ''; tradeItem.onclick = openTrade; }
-
-const buyItem = document.getElementById('buy-menu-item');
-if (buyItem) buyItem.onclick = buyProperty;
+// Wire up Buy and Trade buttons
+const buyBtn = document.getElementById('buy-btn');
+const tradeBtn = document.getElementById('trade-btn');
+if (buyBtn) buyBtn.onclick = buyProperty;
+if (tradeBtn) tradeBtn.onclick = openTrade;
 const endTurnBtn = document.getElementById('endturn');
 if (endTurnBtn) endTurnBtn.onclick = () => send('endTurn');
 const buildBtn = document.getElementById('build');
@@ -295,7 +281,30 @@ window.addEventListener('DOMContentLoaded', async () => {
   const minimizeVideoBtn = document.getElementById('minimize-video-btn');
 
   if (loginBtn) loginBtn.onclick = openLogin;
-  if (logoutBtn) logoutBtn.onclick = async () => { await logout(); await refreshAuth(); };
+  if (logoutBtn) logoutBtn.onclick = async () => {
+    // Stop video chat if active
+    try {
+      const videoModule = await import('./video-chat.js');
+      if (videoModule.isVideoChatActive && videoModule.isVideoChatActive()) {
+        videoModule.toggleVideo();
+      }
+    } catch {}
+    // Close WebSocket connection
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.close();
+    }
+    // Logout from server
+    await logout();
+    await refreshAuth();
+    // Return to start page by hiding game and showing setup
+    hideGame();
+    // Clear game state
+    window.__state.boardBuilt = false;
+    window.__state.lastGameState = undefined;
+    window.__state.playerId = undefined;
+    // Clear hash to get a fresh game next time
+    window.location.hash = '';
+  };
   if (loginSubmit) loginSubmit.onclick = async () => {
     const name = document.getElementById('loginname').value.trim();
     if (name) { await login(name); await refreshAuth(); closeLogin(); }

@@ -22,6 +22,7 @@ export class Game implements DurableObject {
   sessions: WebSocket[] = [];
   gameState?: GameState;
   playerIds: Map<WebSocket, number> = new Map();
+  videoActivePlayerIds: Set<number> = new Set();
 
   /**
    * Creates a new Game instance.
@@ -150,6 +151,10 @@ export class Game implements DurableObject {
       if (playerId !== undefined) {
           // Handle player disconnect logic if needed (e.g., mark as inactive)
           console.log(`Player ${playerId} disconnected.`);
+          // Clean up video state if they had video active
+          if (this.videoActivePlayerIds.has(playerId)) {
+            this.handleVideoStopped(playerId);
+          }
           this.playerIds.delete(ws);
       }
       this.sessions = this.sessions.filter((session) => session !== ws);
@@ -217,6 +222,11 @@ export class Game implements DurableObject {
     }
 
     this.gameState.log.push(`${newPlayer.name} has joined the game.`);
+
+    // Auto-fill with AI agents after first human player joins (ensures at least 2 players)
+    if (this.gameState.players.length === 1) {
+      await this.autoFillAIAgents(2, 8);
+    }
 
     await this.updateAndBroadcast();
   }
@@ -383,6 +393,34 @@ export class Game implements DurableObject {
     const player = this.gameState.players.find(p => p.id === playerId);
     if (!player) return;
 
+    // First, send the new player a list of existing video participants
+    // so they can initiate connections to them
+    const existingVideoPeers = Array.from(this.videoActivePlayerIds)
+      .filter(id => id !== playerId)
+      .map(id => {
+        const p = this.gameState!.players.find(pp => pp.id === id);
+        return p ? { playerId: p.id, playerName: p.name } : null;
+      })
+      .filter(Boolean);
+
+    // Send existing peers to the new player
+    const newPlayerWs = Array.from(this.playerIds.entries())
+      .find(([, pid]) => pid === playerId)?.[0];
+
+    if (newPlayerWs && newPlayerWs.readyState === WebSocket.OPEN && existingVideoPeers.length > 0) {
+      try {
+        newPlayerWs.send(JSON.stringify({
+          type: 'EXISTING_VIDEO_PEERS',
+          payload: { peers: existingVideoPeers }
+        }));
+      } catch (err) {
+        console.error('Error sending existing peers:', err);
+      }
+    }
+
+    // Add this player to the video-active set
+    this.videoActivePlayerIds.add(playerId);
+
     // Broadcast to all other players that this player joined video
     this.broadcastToOthers({
       type: 'PEER_JOINED',
@@ -401,6 +439,9 @@ export class Game implements DurableObject {
     if (!this.gameState) return;
     const player = this.gameState.players.find(p => p.id === playerId);
     if (!player) return;
+
+    // Remove from video-active set
+    this.videoActivePlayerIds.delete(playerId);
 
     // Broadcast to all other players that this player left video
     this.broadcastToOthers({
@@ -478,7 +519,10 @@ export class Game implements DurableObject {
     const clean = t.slice(0, maxLen);
     const p = this.gameState.players.find(pp => pp.id === playerId);
     const name = p?.name || `P${playerId}`;
-    const msg = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, playerId, name, text: clean, ts: Date.now() };
+    const randomBytes = new Uint8Array(6);
+    crypto.getRandomValues(randomBytes);
+    const randomHex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const msg = { id: `${Date.now()}-${randomHex}`, playerId, name, text: clean, ts: Date.now() };
     this.gameState.chat = this.gameState.chat || [];
     this.gameState.chat.push(msg);
     // keep last 200
@@ -492,11 +536,13 @@ export class Game implements DurableObject {
     const now = Date.now();
     const nextOk = (this.gameState.chatAiNextTs || 0) <= now;
     const randomChance = Math.random() < 0.2; // 20% chance on any chat
+    // Explicit calls always trigger, random only if cooldown passed
     if (explicit || (nextOk && randomChance)) {
-      // set cooldown ~30s
+      // set cooldown ~30s (but explicit calls bypass the check above)
       this.gameState.chatAiNextTs = now + 30_000;
       // fire and forget; don't await to keep chat snappy
-      this.aiBanter(t).catch(() => {});
+      console.log('Triggering AI banter for:', explicit ? 'explicit command' : 'random chance');
+      this.aiBanter(t).catch((e) => console.error('AI banter error:', e));
     }
   }
 
@@ -520,13 +566,12 @@ export class Game implements DurableObject {
    */
   private defaultModel(): string {
     // Prefer env.DEFAULT_AI_MODEL when available
-    try {
-      // @ts-ignore
-      const m = (this.env as any).DEFAULT_AI_MODEL;
-      return m || '@cf/meta/llama-2-7b-chat-int8';
-    } catch {
-      return '@cf/meta/llama-2-7b-chat-int8';
+    // @ts-ignore
+    const m = (this.env as any)?.DEFAULT_AI_MODEL;
+    if (!m) {
+      console.warn('DEFAULT_AI_MODEL not set in environment, using fallback model');
     }
+    return m || '@cf/meta/llama-2-7b-chat-int8';
   }
 
   /**
@@ -534,7 +579,11 @@ export class Game implements DurableObject {
    * @param triggerText The text that triggered the banter.
    */
   private async aiBanter(triggerText: string) {
-    if (!this.gameState || !this.env?.AI) return;
+    if (!this.gameState) return;
+    if (!this.env?.AI) {
+      console.warn('AI binding not available for aiBanter');
+      return;
+    }
     const speaker = this.pickAiSpeaker();
     const recent = (this.gameState.chat || []).slice(-8)
       .map(m => `${m.name}: ${m.text}`)
@@ -569,7 +618,10 @@ export class Game implements DurableObject {
     if (!text) return;
     // Trim long responses
     if (text.length > 300) text = text.slice(0, 300);
-    const msg = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, playerId: speaker.id, name: speaker.name, text, ts: Date.now() };
+    const aiRandomBytes = new Uint8Array(6);
+    crypto.getRandomValues(aiRandomBytes);
+    const aiRandomHex = Array.from(aiRandomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const msg = { id: `${Date.now()}-${aiRandomHex}`, playerId: speaker.id, name: speaker.name, text, ts: Date.now() };
     this.gameState.chat = this.gameState.chat || [];
     this.gameState.chat.push(msg);
     if (this.gameState.chat.length > 200) this.gameState.chat = this.gameState.chat.slice(-200);
@@ -838,9 +890,14 @@ export class Game implements DurableObject {
         // @ts-ignore
         if (env && env.monopolyd1) {
           for (const p of this.gameState.players) {
-            const col = p.id === winner.id ? 'wins' : 'losses';
-            await env.monopolyd1.prepare(`UPDATE users SET ${col} = COALESCE(${col},0)+1 WHERE username=?`)
-              .bind(p.name).run();
+            const isWinner = p.id === winner.id;
+            if (isWinner) {
+              await env.monopolyd1.prepare('UPDATE users SET wins = COALESCE(wins,0)+1 WHERE username=?')
+                .bind(p.name).run();
+            } else {
+              await env.monopolyd1.prepare('UPDATE users SET losses = COALESCE(losses,0)+1 WHERE username=?')
+                .bind(p.name).run();
+            }
           }
         }
       } catch (e) {
@@ -1073,11 +1130,17 @@ export class Game implements DurableObject {
    */
   async addNpc(count: number, modelId?: string) {
     if (!this.gameState) return;
+    // Fun AI agent names
+    const aiNames = [
+      'RoboBaron', 'PropertyBot', 'MonopolAI', 'LandlordX',
+      'DealMaker3000', 'TokenTitan', 'RentSeeker', 'BoardBot'
+    ];
     for (let i = 0; i < count; i++) {
       const id = this.gameState.players.length;
+      const nameIndex = this.gameState.players.filter(p => !p.isHuman).length;
       const npc: Player = {
         id,
-        name: `CPU ${id + 1}`,
+        name: aiNames[nameIndex % aiNames.length] || `AI ${id + 1}`,
         color: ['Aqua','Fuchsia','Gray','Lime','Maroon','Navy','Olive','Teal'][id % 8].toLowerCase(),
         money: 1500,
         position: 0,
@@ -1095,28 +1158,193 @@ export class Game implements DurableObject {
   }
 
   /**
-   * Simulates a turn for an AI player.
+   * Simulates a turn for an AI player using intelligent decision making.
    * @param playerId The ID of the AI player.
    * @returns A promise that resolves when the AI has taken its turn.
    */
   async aiTakeTurn(playerId: number) {
     if (!this.gameState) return;
-    // Very simple heuristic: roll, buy if can afford, otherwise end turn
-    await this.rollDice(playerId);
     const player = this.gameState.players.find(p => p.id === playerId);
     if (!player) return;
+
+    // Roll the dice
+    await this.rollDice(playerId);
+
+    // Check if we landed on an unowned property
     const sq = this.gameState.squares[player.position];
     if ((sq.type === 'property' || sq.type === 'railroad' || sq.type === 'utility') && sq.ownerId === undefined) {
-      if (player.money >= (sq.price ?? 0)) {
+      // Use AI to decide whether to buy
+      const shouldBuy = await this.aiDecideBuy(player, sq);
+      if (shouldBuy && player.money >= (sq.price ?? 0)) {
         await this.buyProperty(playerId);
+      } else if (player.money >= (sq.price ?? 0)) {
+        // Decline to buy - will trigger auction
+        await this.declineToBuyProperty(playerId);
       }
     }
-    // nextTurn is called by rollDice path for non-doubles; nothing else to do here
+
+    // Check if we should build houses (if turn not ended yet)
+    if (this.gameState.turnState !== 'ended') {
+      await this.aiConsiderBuilding(player);
+    }
+
+    // End turn if still in acting state
+    if (this.gameState.turnState === 'ended') {
+      // Turn will auto-advance via nextTurn
+    }
   }
 
   /**
-   * Adds local players for hot-seat mode.
-   * @param count The number of local players to add.
+   * AI decides whether to buy a property using Cloudflare AI.
+   * @param player The AI player making the decision.
+   * @param square The property to potentially buy.
+   * @returns A promise that resolves to true if the AI should buy.
+   */
+  async aiDecideBuy(player: Player, square: any): Promise<boolean> {
+    if (!this.gameState) return false;
+
+    // Quick heuristics first (fallback if AI fails)
+    const price = square.price ?? 0;
+    const moneyAfterBuy = player.money - price;
+
+    // Always buy if we can easily afford it (have 3x the price left over)
+    if (moneyAfterBuy >= price * 2) return true;
+
+    // Never buy if it would leave us with less than $100
+    if (moneyAfterBuy < 100) return false;
+
+    // Check if we own other properties in the same group
+    const groupSquares = this.gameState.squares.filter(s => s.group === square.group);
+    const ownedInGroup = groupSquares.filter(s => s.ownerId === player.id).length;
+
+    // Always complete a monopoly
+    if (ownedInGroup === groupSquares.length - 1) return true;
+
+    // Railroads and utilities are good investments
+    if (square.type === 'railroad' || square.type === 'utility') {
+      const railroads = this.gameState.squares.filter(s => s.type === 'railroad' && s.ownerId === player.id);
+      const utilities = this.gameState.squares.filter(s => s.type === 'utility' && s.ownerId === player.id);
+      if (square.type === 'railroad' && railroads.length >= 1) return true;
+      if (square.type === 'utility' && utilities.length >= 1) return true;
+    }
+
+    // Try to use AI for more nuanced decisions
+    try {
+      const model = player.modelId || this.defaultModel();
+      const context = this.buildAIContext(player);
+      const prompt = [
+        'You are an AI playing Monopoly. Answer only YES or NO.',
+        '',
+        `You are ${player.name} with $${player.money}.`,
+        `Property: ${square.name} costs $${price}`,
+        `Type: ${square.type}, Group: ${square.group || 'N/A'}`,
+        `Money after purchase: $${moneyAfterBuy}`,
+        '',
+        'Game context:',
+        context,
+        '',
+        'Should you buy this property? Answer YES or NO only:'
+      ].join('\n');
+
+      const res = await this.env.AI.run(model, { prompt });
+      const answer = String(res?.response || res?.result || res || '').trim().toUpperCase();
+      return answer.includes('YES');
+    } catch {
+      // Fallback: buy if we have enough money and it's a reasonable investment
+      return moneyAfterBuy >= 200;
+    }
+  }
+
+  /**
+   * AI considers building houses on owned properties.
+   * @param player The AI player.
+   */
+  async aiConsiderBuilding(player: Player) {
+    if (!this.gameState) return;
+
+    // Find complete monopolies
+    const ownedSquares = this.gameState.squares.filter(s => s.ownerId === player.id && s.type === 'property');
+    const groups = new Set(ownedSquares.map(s => s.group).filter(Boolean));
+
+    for (const group of groups) {
+      const groupSquares = this.gameState.squares.filter(s => s.group === group);
+      const allOwned = groupSquares.every(s => s.ownerId === player.id);
+
+      if (allOwned) {
+        // Find property with fewest houses that isn't mortgaged
+        const buildable = groupSquares
+          .filter(s => !s.mortgaged && (s.houses || 0) < 5)
+          .sort((a, b) => (a.houses || 0) - (b.houses || 0));
+
+        if (buildable.length > 0) {
+          const target = buildable[0];
+          const cost = target.houseCost || 0;
+
+          // Only build if we have plenty of money (keep $300 reserve)
+          if (player.money - cost >= 300) {
+            await this.buildHouse(player.id, target.id);
+            this.gameState.log.push(`${player.name} (AI) built on ${target.name}.`);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Builds a context string for AI decisions.
+   * @param player The player for context.
+   * @returns A context string describing the game state.
+   */
+  buildAIContext(player: Player): string {
+    if (!this.gameState) return '';
+
+    const owned = this.gameState.squares.filter(s => s.ownerId === player.id);
+    const opponents = this.gameState.players.filter(p => p.id !== player.id && !p.bankrupt);
+
+    const lines = [
+      `Your properties: ${owned.map(s => s.name).join(', ') || 'None'}`,
+      `Opponents: ${opponents.map(p => `${p.name} ($${p.money})`).join(', ')}`,
+      `Turn: ${this.gameState.turn}`,
+    ];
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Auto-fills empty player slots with AI agents.
+   * Called when a game starts to ensure there are at least 2 players.
+   * @param minPlayers Minimum number of players (default 2).
+   * @param maxPlayers Maximum number of players (default 8).
+   */
+  async autoFillAIAgents(minPlayers: number = 2, maxPlayers: number = 8) {
+    if (!this.gameState) return;
+
+    const currentCount = this.gameState.players.length;
+
+    // Fill to maxPlayers with AI agents
+    if (currentCount < maxPlayers) {
+      const toAdd = maxPlayers - currentCount;
+      // Assign different AI models to agents for variety
+      const aiModels = [
+        '@cf/meta/llama-3.1-8b-instruct-fast',
+        '@cf/qwen/qwen2.5-coder-32b-instruct',
+        '@cf/mistral/mistral-small-3.1-24b-instruct',
+        '@cf/google/gemma-3-12b-it',
+        '@cf/meta/llama-3.2-3b-instruct',
+        '@cf/deepseek/deepseek-r1-distill-qwen-32b',
+        '@cf/meta/llama-3-8b-instruct',
+      ];
+      for (let i = 0; i < toAdd; i++) {
+        const modelId = aiModels[i % aiModels.length];
+        await this.addNpc(1, modelId);
+      }
+      this.gameState.log.push(`Added ${toAdd} AI agent${toAdd > 1 ? 's' : ''} to fill the game.`);
+    }
+  }
+
+  /**
+   * Adds hoomun players for hot-seat mode.
+   * @param count The number of hoomun players to add.
    * @returns A promise that resolves when the players have been added.
    */
   async addLocalPlayers(count: number) {
@@ -1126,7 +1354,7 @@ export class Game implements DurableObject {
       const id = this.gameState.players.length;
       const p: Player = {
         id,
-        name: `Local ${id + 1}`,
+        name: `Hoomun ${id + 1}`,
         color: ['orange','purple','red','silver','black','green'][id % 6],
         money: 1500,
         position: 0,
@@ -1138,7 +1366,7 @@ export class Game implements DurableObject {
         bankrupt: false,
       };
       this.gameState.players.push(p);
-      this.gameState.log.push(`${p.name} (local) joined.`);
+      this.gameState.log.push(`${p.name} (hoomun) joined.`);
     }
   }
 
@@ -1154,6 +1382,7 @@ export class Game implements DurableObject {
     const player = this.gameState.players.find(p => p.id === playerId);
     if (!sq || !player || sq.type !== 'property') return;
     if (sq.ownerId !== playerId || sq.mortgaged) return;
+    if (!sq.group) return; // Validate group exists
     const groupSquares = this.gameState.squares.filter(s => s.group === sq.group);
     if (!groupSquares.every(s => s.ownerId === playerId)) return;
     if (sq.houses >= 5) return;
@@ -1256,8 +1485,9 @@ export class Game implements DurableObject {
     if (!this.gameState || !this.gameState.trade) return;
     const t = this.gameState.trade;
     if (actorId !== t.recipientId) return;
-    const from = this.gameState.players.find(p => p.id === t.initiatorId)!;
-    const to = this.gameState.players.find(p => p.id === t.recipientId)!;
+    const from = this.gameState.players.find(p => p.id === t.initiatorId);
+    const to = this.gameState.players.find(p => p.id === t.recipientId);
+    if (!from || !to) return;
     from.money -= t.offer.money; to.money += t.offer.money;
     to.money -= t.request.money; from.money += t.request.money;
     for (const pid of t.offer.properties) {

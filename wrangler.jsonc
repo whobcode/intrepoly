@@ -10,6 +10,12 @@
   "services": [
     { "binding": "GAME_SOCKETS", "service": "game-sockets" }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_destination_addresses": []
+    }
+  ],
 	"images": {
 		"binding": "IMAGES"
 	},

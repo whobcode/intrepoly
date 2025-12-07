@@ -7,26 +7,24 @@ const logoContainer = null;
 
 export async function initBoardLogoCycling() {
   // Create logo container in board center if it doesn't exist
-  const boardCenterCells = document.querySelectorAll('.board-center');
-  if (boardCenterCells.length === 0) return;
+  const boardCenter = document.getElementById('board-center-cell');
+  if (!boardCenter) return;
 
-  // Use the first board center cell
-  const boardCenter = boardCenterCells[0];
   const logoDiv = document.createElement('div');
   logoDiv.id = 'board-logo-container';
   logoDiv.style.cssText = `
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    max-width: 320px;
-    max-height: 320px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 10;
     width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   `;
   boardCenter.style.position = 'relative';
   boardCenter.style.overflow = 'hidden';
@@ -67,7 +65,7 @@ export async function initBoardLogoCycling() {
 function displayLogo(container, index) {
   if (logos.length === 0) return;
   const logo = logos[index % logos.length];
-  container.innerHTML = `<img src="${logo.url}" alt="Board logo" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px;" />`;
+  container.innerHTML = `<img src="${logo.url}" alt="Board logo" style="width: 100%; height: 100%; object-fit: cover;" />`;
 }
 
 function startCycling(container) {

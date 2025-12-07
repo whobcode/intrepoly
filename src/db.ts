@@ -18,6 +18,9 @@ export async function initCore(monopolyd1: D1Database) {
       wallet_id TEXT,
       online INTEGER DEFAULT 0,
       gamer_id TEXT UNIQUE,
+      email_verified INTEGER DEFAULT 0,
+      verification_token TEXT,
+      verification_expires TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );`,
@@ -44,6 +47,20 @@ export async function initCore(monopolyd1: D1Database) {
     } catch (e) {
       // Ignore errors for tables that already exist
       console.log('initCore statement skipped:', e);
+    }
+  }
+
+  // Migration: Add missing columns to existing users table
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0;`,
+    `ALTER TABLE users ADD COLUMN verification_token TEXT;`,
+    `ALTER TABLE users ADD COLUMN verification_expires TEXT;`
+  ];
+  for (const m of migrations) {
+    try {
+      await monopolyd1.prepare(m).run();
+    } catch (e) {
+      // Column already exists, ignore
     }
   }
 }
@@ -198,4 +215,61 @@ function makeGamerId() {
   let s = '';
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+/**
+ * Generates a secure verification token.
+ * @returns A URL-safe verification token string.
+ */
+export function generateVerificationToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+/**
+ * Saves a verification token for a user.
+ * @param monopolyd1 The D1 database instance.
+ * @param email The user's email address.
+ * @param token The verification token.
+ * @param expiresInHours How many hours until the token expires (default 24).
+ */
+export async function saveVerificationToken(monopolyd1: D1Database, email: string, token: string, expiresInHours: number = 24) {
+  const expires = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString();
+  await monopolyd1.prepare(
+    'UPDATE users SET verification_token=?, verification_expires=?, updated_at=datetime("now") WHERE email=?'
+  ).bind(token, expires, email).run();
+}
+
+/**
+ * Verifies a user's email using their verification token.
+ * @param monopolyd1 The D1 database instance.
+ * @param token The verification token.
+ * @returns The user if verification succeeded, null otherwise.
+ */
+export async function verifyEmailToken(monopolyd1: D1Database, token: string): Promise<any> {
+  const user = await monopolyd1.prepare(
+    'SELECT * FROM users WHERE verification_token=? AND verification_expires > datetime("now")'
+  ).bind(token).first();
+
+  if (!user) return null;
+
+  // Mark email as verified and clear token
+  await monopolyd1.prepare(
+    'UPDATE users SET email_verified=1, verification_token=NULL, verification_expires=NULL, updated_at=datetime("now") WHERE id=?'
+  ).bind(user.id).run();
+
+  return user;
+}
+
+/**
+ * Checks if a user's email is verified.
+ * @param monopolyd1 The D1 database instance.
+ * @param email The user's email address.
+ * @returns True if verified, false otherwise.
+ */
+export async function isEmailVerified(monopolyd1: D1Database, email: string): Promise<boolean> {
+  const user = await monopolyd1.prepare('SELECT email_verified FROM users WHERE email=?').bind(email).first();
+  return user?.email_verified === 1;
 }

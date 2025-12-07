@@ -10,6 +10,69 @@ function ensureElements() {
   badgeEl = document.getElementById('chat-badge');
 }
 
+// Toggle chat panel visibility
+export function toggleChatPanel() {
+  const panel = document.getElementById('chat');
+  if (!panel) return;
+  const collapsed = panel.getAttribute('data-collapsed') === '1';
+  panel.setAttribute('data-collapsed', collapsed ? '0' : '1');
+  if (!collapsed && badgeEl) {
+    badgeEl.textContent = '0';
+    badgeEl.style.display = 'none';
+  }
+  // Focus input when opening
+  if (collapsed && inputEl) {
+    setTimeout(() => inputEl.focus(), 100);
+  }
+}
+
+// Ask AI using the selected model from the dropdown
+async function askAI(prompt) {
+  const modelSelect = document.getElementById('ollamaModelSelect');
+  const selectedModel = modelSelect?.value || 'deepseek-v3.1:671b-cloud';
+
+  // Show thinking message
+  appendChatMessage({ name: 'AI', text: '🤔 Thinking...', ts: Date.now() });
+
+  try {
+    const response = await fetch('/api/ollama/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: selectedModel,
+        prompt: prompt,
+        gameState: window.__state?.lastGameState
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.response) {
+      // Remove "Thinking..." and show actual response
+      const items = listEl.querySelectorAll('.chat-item');
+      const lastItem = items[items.length - 1];
+      if (lastItem && lastItem.textContent.includes('Thinking...')) {
+        lastItem.remove();
+      }
+      appendChatMessage({ name: 'AI', text: data.response, ts: Date.now() });
+    } else {
+      throw new Error(data.error || 'No response');
+    }
+  } catch (error) {
+    // Remove "Thinking..." and show error
+    const items = listEl.querySelectorAll('.chat-item');
+    const lastItem = items[items.length - 1];
+    if (lastItem && lastItem.textContent.includes('Thinking...')) {
+      lastItem.remove();
+    }
+    appendChatMessage({ name: 'AI', text: `❌ Error: ${error.message}`, ts: Date.now() });
+  }
+}
+
 export function initChatUI() {
   ensureElements();
   if (!formEl || !inputEl || !listEl) return;
@@ -17,8 +80,18 @@ export function initChatUI() {
     e.preventDefault();
     const v = inputEl.value.trim();
     if (!v) return;
-    sendChat(v);
-    inputEl.value = '';
+
+    // Check for @ai prefix
+    if (v.toLowerCase().startsWith('@ai ') || v.toLowerCase() === '@ai') {
+      const prompt = v.substring(3).trim() || 'What should I do next?';
+      // Show user's message first
+      appendChatMessage({ name: window.__user || 'You', text: v, ts: Date.now() });
+      inputEl.value = '';
+      askAI(prompt);
+    } else {
+      sendChat(v);
+      inputEl.value = '';
+    }
   });
 }
 
@@ -59,9 +132,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const panel = document.getElementById('chat');
   if (!tab || !panel) return;
   tab.addEventListener('click', () => {
-    const collapsed = panel.getAttribute('data-collapsed') === '1';
-    panel.setAttribute('data-collapsed', collapsed ? '0' : '1');
-    if (!collapsed && badgeEl) { badgeEl.textContent = '0'; badgeEl.style.display = 'none'; }
+    toggleChatPanel();
   });
 
   // Make chat draggable
@@ -72,6 +143,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Load saved position and size from localStorage
   loadPanelState(panel);
+
+  // Keyboard shortcut: Ctrl+Shift+T to toggle chat
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 't') {
+      e.preventDefault();
+      toggleChatPanel();
+    }
+  });
 });
 
 function makeDraggable(element, handle) {

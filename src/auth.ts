@@ -109,10 +109,10 @@ export function getCookie(req: Request, name: string): string | undefined {
 /**
  * Hashes a password using PBKDF2 with SHA-256.
  * @param password The password to hash.
- * @param iterations The number of iterations to use for the key derivation.
+ * @param iterations The number of iterations to use for the key derivation (max 100000 for Workers).
  * @returns A promise that resolves to a string containing the hashed password and salt.
  */
-export async function hashPassword(password: string, iterations = 150000): Promise<string> {
+export async function hashPassword(password: string, iterations = 100000): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, baseKey, 256);
@@ -131,7 +131,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
   try {
     const [scheme, iterStr, saltB64, hashB64] = stored.split('$');
     if (scheme !== 'pbkdf2') return false;
-    const iterations = parseInt(iterStr, 10) || 150000;
+    const iterations = Math.min(parseInt(iterStr, 10) || 100000, 100000);
     const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
     const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
     const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, baseKey, 256);

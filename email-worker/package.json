@@ -1,0 +1,19 @@
+{
+  "name": "hwmnbn-email-worker",
+  "version": "1.0.0",
+  "description": "Email routing worker for hwmnbn.me domain",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "init-db": "wrangler d1 execute email_logs --command \"CREATE TABLE IF NOT EXISTS email_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, from_addr TEXT NOT NULL, to_addr TEXT NOT NULL, subject TEXT, action TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)\""
+  },
+  "dependencies": {
+    "mimetext": "^3.0.24"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250529.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.51.0"
+  }
+}

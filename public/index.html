@@ -9,16 +9,17 @@
 
 <body class="theme-brg">
     <!-- AI Toolbar -->
-    <div id="ai-toolbar" style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #d9b24a;position:fixed;top:50px;left:0;right:0;background:#151515;z-index:1000;font-family:Arial,sans-serif;color:#e6c36a;height:50px;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;gap:8px;">
-            <strong>Ollama AI</strong>:
-            <select id="ollamaModelSelect" style="padding:4px 8px;"></select>
+    <div id="ai-toolbar" style="display:flex;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid #d9b24a;position:fixed;top:20px;left:0;right:0;background:#151515;z-index:1000;font-family:Arial,sans-serif;color:#e6c36a;height:40px;box-sizing:border-box;font-size:11px;">
+        <a href="/lobby.html" id="lobbylink" title="Open lobby" style="color:#e6c36a;text-decoration:none;padding:4px 8px;border:1px solid #d9b24a;border-radius:4px;font-size:12px;">Lobby</a>
+        <button id="sharelink" title="Copy invite link" style="padding:4px 8px;font-size:12px;">Copy Invite</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <select id="ollamaModelSelect" style="padding:4px 8px;font-size:12px;"></select>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-            <input id="aiPromptInput" type="text" placeholder="Ask AI for strategy advice..." style="width:400px;padding:4px 8px;" />
-            <button id="aiAskBtn">Ask AI</button>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;">
+            <input id="aiPromptInput" type="text" placeholder="Ask AI for strategy advice..." style="flex:1;max-width:350px;padding:4px 8px;font-size:12px;" />
+            <button id="aiAskBtn" style="font-size:12px;padding:4px 10px;">Ask AI</button>
         </div>
-        <div id="aiStatus" style="font-size:12px;color:#b08f3b;"></div>
+        <div id="aiStatus" style="font-size:11px;color:#b08f3b;"></div>
     </div>
 
     <!-- AI Response Popup -->
@@ -61,41 +62,31 @@
 			<td class="cell board-corner" id="cell30"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell19"></td>
-			<td colspan="9" class="board-center"></td>
+			<td colspan="9" rowspan="9" class="board-center" id="board-center-cell"></td>
 			<td class="cell board-right" id="cell31"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell18"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell32"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell17"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell33"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell16"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell34"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell15"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell35"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell14"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell36"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell13"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell37"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell12"></td>
-			<td colspan="9" class="board-center"></td>
 			<td class="cell board-right" id="cell38"></td>
 		</tr><tr>
 			<td class="cell board-left" id="cell11"></td>
-			<td colspan="9" class="board-center">
-				<div id="jail"></div>
-			</td>
 			<td class="cell board-right" id="cell39"></td>
 		</tr><tr>
 			<td class="cell board-corner" id="cell10"></td>
@@ -217,23 +208,7 @@
             </select>
         </div>
         <div style="margin: 12px 0px;">
-            <label for="localCount" style="display:block; margin-bottom:6px;">Local Humans</label>
-            <select id="localCount" title="Number of local human players (same device)">
-                <option value="1" selected>1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-            </select>
-        </div>
-        <div style="margin: 12px 0px;">
-            <label for="aiCount" style="display:block; margin-bottom:6px;">CPU Opponents</label>
-            <select id="aiCount" title="Number of CPU opponents">
-                <option value="0" selected>0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-            </select>
+            <p style="font-size:12px; color:#666; margin:8px 0;">AI agents will automatically fill empty slots (up to 8 players total).</p>
         </div>
 
         <div style="margin: 20px 0px;">
@@ -244,57 +219,55 @@
 	</div>
 
 	<div id="control" style="display:none;">
-		<table>
-			<tr>
-				<td style="text-align: left; vertical-align: top; border: none;">
-					<div id="menu">
-                    <table id="menutable" cellspacing="0">
-                        <tr>
-                            <td class="menu-item" id="buy-menu-item">
-                                <a href="javascript:void(0);" title="Buy the property you landed on.">Buy</a>
-                            </td>
-                            <td class="menu-item" id="trade-menu-item">
-                                <a href="javascript:void(0);" title="Open trade panel to exchange money or properties.">Trade</a>
-                            </td>
-                        </tr>
-                    </table>
-					</div>
-
-                    <!-- legacy buy/manage panes removed -->
-				</td>
-				<td style="vertical-align: top; border: none;">
-					<div id="quickstats" style="">
-							<div><span id="pname" >Player 1</span>:</div>
-							<div><span id="pmoney">$1500</span></div>
-					</div>
-					<div>
-						<div id="die0" title="Die" class="die die-no-img"></div>
-						<div id="die1"title="Die" class="die die-no-img"></div>
-					</div>
-
-				</td>
-			</tr><tr>
-                <td colspan="2" style="border: none">
-                    <div style="padding-top: 8px;">
-                        <input type="button" id="nextbutton" title="Roll the dice and move your token accordingly." value="Roll Dice"/>
-                        <input type="button" id="endturn" title="End your turn." value="End Turn"/>
-                        <input type="button" id="build" title="Build a house/hotel on a property you own." value="Build"/>
-                        <input type="button" id="mortgage" title="Mortgage a property you own for cash." value="Mortgage"/>
-                        <input type="button" id="unmortgage" title="Unmortgage a property you own." value="Unmortgage"/>
-                        <input type="button" id="startauction" title="Start an auction for the current unowned property." value="Start Auction"/>
-                    <!-- resign not implemented in server version for now -->
-                    </div>
-                </td>
-            </tr>
-        </table>
-        </div>
+		<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:nowrap; width:100%;">
+			<div id="quickstats" style="display:flex; align-items:center; gap:4px; min-width:fit-content;">
+				<span id="pname">Player 1</span>: <span id="pmoney">$1500</span>
+				<div id="die0" title="Die" class="die die-no-img" style="display:inline-block;"></div>
+				<div id="die1" title="Die" class="die die-no-img" style="display:inline-block;"></div>
+			</div>
+			<div style="display:flex; align-items:center; gap:4px; flex-wrap:nowrap;">
+				<input type="button" id="buy-btn" title="Buy the property you landed on." value="Buy" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="trade-btn" title="Open trade panel." value="Trade" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="nextbutton" title="Roll the dice and move your token accordingly." value="Roll Dice" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="endturn" title="End your turn." value="End Turn" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="build" title="Build a house/hotel on a property you own." value="Build" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="mortgage" title="Mortgage a property you own for cash." value="Mortgage" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="unmortgage" title="Unmortgage a property you own." value="Unmortgage" style="padding:4px 8px; font-size:11px;"/>
+				<input type="button" id="startauction" title="Start an auction for the current unowned property." value="Auction" style="padding:4px 8px; font-size:11px;"/>
+			</div>
+		</div>
+	</div>
 
     <!-- legacy trade section removed -->
 
-    <!-- Event Log -->
-    <div id="eventlog" aria-live="polite" aria-label="Game events">
-        <h3>Events</h3>
-        <ul id="eventlog-list"></ul>
+    <!-- Left Sidebar with Event Log, Game Stats, and Video Chat -->
+    <div id="left-sidebar">
+        <!-- Event Log -->
+        <div id="eventlog" aria-live="polite" aria-label="Game events">
+            <h3>📜 Event Log</h3>
+            <ul id="eventlog-list"></ul>
+        </div>
+        <!-- Game Stats Panel -->
+        <div id="gamestats">
+            <h3>🎲 Game Info</h3>
+            <div id="gamestats-content">
+                <div class="stat-row"><span class="stat-label">Turn:</span> <span id="stat-turn">-</span></div>
+                <div class="stat-row"><span class="stat-label">Current Player:</span> <span id="stat-current-player">-</span></div>
+                <div class="stat-row"><span class="stat-label">Phase:</span> <span id="stat-phase">-</span></div>
+                <div class="stat-row"><span class="stat-label">Last Roll:</span> <span id="stat-last-roll">-</span></div>
+                <div class="banker-message" id="banker-message">Welcome to Monopoly! Roll the dice to begin.</div>
+            </div>
+        </div>
+        <!-- Video Chat Grid (under logs) -->
+        <div id="sidebar-video-section" style="margin-top:10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <h4 style="margin:0; font-size:12px; color:#666;">📹 Video Chat</h4>
+                <button id="sidebar-join-video-btn" style="font-size:10px; padding:2px 6px;">Join</button>
+            </div>
+            <div id="sidebar-video-grid" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:4px; max-height:200px; overflow-y:auto;">
+                <!-- Video thumbnails appear here when active -->
+            </div>
+        </div>
     </div>
     <!-- Game Over overlay -->
     <div id="gameover" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2000;">
@@ -305,6 +278,45 @@
         <div style="margin-top:12px; display:flex; gap:8px; justify-content:center;">
           <a href="/lobby.html" class="button-like" style="padding:8px 12px; background:#305BC9; color:#fff; border-radius:6px; text-decoration:none;">Back to Lobby</a>
           <button id="newgamebtn" style="padding:8px 12px;">New Game</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Property Info Modal -->
+    <div id="propertymodal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1500;">
+      <div id="propertymodal-content" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:0; border-radius:10px; min-width:280px; max-width:320px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <div id="property-header" style="padding:12px 16px; color:#fff; font-weight:bold; text-align:center;">
+          <span id="property-name">Property Name</span>
+        </div>
+        <div style="padding:16px;">
+          <div id="property-type" style="text-align:center; font-size:12px; color:#666; margin-bottom:12px;"></div>
+
+          <div id="property-price-section" style="text-align:center; margin-bottom:12px;">
+            <div style="font-size:20px; font-weight:bold;">$<span id="property-price">0</span></div>
+            <div style="font-size:11px; color:#888;">Purchase Price</div>
+          </div>
+
+          <div id="property-rent-section" style="border:1px solid #ddd; border-radius:6px; padding:10px; margin-bottom:12px;">
+            <div style="font-weight:600; margin-bottom:8px; font-size:13px;">Rent Schedule</div>
+            <div id="property-rent-list" style="font-size:12px; line-height:1.8;"></div>
+          </div>
+
+          <div id="property-house-cost" style="text-align:center; margin-bottom:12px; font-size:12px;"></div>
+
+          <div id="property-mortgage" style="text-align:center; margin-bottom:12px; font-size:12px; color:#666;"></div>
+
+          <div id="property-current-status" style="border-top:1px solid #eee; padding-top:12px; margin-top:12px;">
+            <div style="font-weight:600; margin-bottom:8px; font-size:13px;">Current Status</div>
+            <div id="property-owner" style="font-size:12px; margin-bottom:4px;"></div>
+            <div id="property-houses" style="font-size:12px; margin-bottom:4px;"></div>
+            <div id="property-current-rent" style="font-size:12px; margin-bottom:4px;"></div>
+            <div id="property-mortgaged" style="font-size:12px; color:#c32222;"></div>
+          </div>
+
+          <div id="property-square-id" style="text-align:right; font-size:10px; color:#aaa; margin-top:8px;"></div>
+        </div>
+        <div style="padding:12px 16px; border-top:1px solid #eee; text-align:right;">
+          <button id="propertymodal-close" style="padding:8px 16px;">Close</button>
         </div>
       </div>
     </div>
@@ -328,17 +340,13 @@
     <script type="module" src="js/chat.js"></script>
     <script type="module" src="js/ollama-ai.js"></script>
     <script type="module" src="js/board-logo.js"></script>
-    <!-- Top bar with auth and share -->
-    <div id="topbar" style="position:fixed; top:8px; left:8px; right:8px; display:flex; justify-content:space-between; align-items:center; z-index:1000; gap:12px;">
-      <div>
-        <a href="/lobby.html" id="lobbylink" title="Open lobby" style="margin-right:8px;">Lobby</a>
-        <button id="sharelink" title="Copy invite link">Copy Invite Link</button>
-      </div>
-      <div>
-        <span id="authstatus" style="margin-right:8px;">Signed out</span>
-        <span id="presence" style="margin-right:8px; color:#555;"></span>
-        <button id="loginbtn">Sign in</button>
-        <button id="logoutbtn" style="display:none;">Sign out</button>
+    <!-- Top bar with auth -->
+    <div id="topbar" style="position:fixed; top:0; left:0; right:0; height:25px; display:flex; justify-content:flex-end; align-items:center; z-index:1001; padding:0 12px; box-sizing:border-box;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="authstatus" style="font-size:11px;">Signed out</span>
+        <span id="presence" style="font-size:11px; color:#aaa;"></span>
+        <button id="loginbtn" style="font-size:11px; padding:3px 8px;">Sign in</button>
+        <button id="logoutbtn" style="display:none; font-size:11px; padding:3px 8px;">Sign out</button>
       </div>
       <div id="loginmodal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:16px; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.2); min-width:300px;">
         <h3>Sign in / Sign up</h3>
@@ -396,16 +404,16 @@
       </div>
     </div>
 
-    <!-- Floating Chat Panel -->
-    <div id="chat" data-collapsed="1" style="position:fixed; right:12px; bottom:12px; width:320px; max-height:50vh; background:#fff; border:1px solid #e6e8f0; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,0.15); overflow:hidden; z-index:999;">
+    <!-- Floating Chat Panel (Ctrl+Shift+T to toggle) -->
+    <div id="chat" data-collapsed="0" style="position:fixed; right:12px; bottom:60px; width:320px; max-height:35vh; background:#fff; border:1px solid #e6e8f0; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,0.15); overflow:hidden; z-index:999;">
       <div id="chat-tab" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:#f6f7fb; border-bottom:1px solid #e6e8f0;">
-        <div style="font-weight:600;">Table Chat</div>
+        <div style="font-weight:600;">💬 Table Chat <span style="font-size:10px; color:#888;">(Ctrl+Shift+T)</span></div>
         <div id="chat-badge" style="display:none; background:#e11d48; color:#fff; border-radius:10px; padding:1px 6px; font-size:12px;">0</div>
       </div>
       <div id="chat-body" style="display:flex; flex-direction:column; gap:6px; padding:8px; height: 220px; overflow:auto;" >
         <div id="chat-list" style="flex:1; overflow:auto;"></div>
         <form id="chat-form" style="display:flex; gap:6px; margin-top:6px;">
-          <input id="chat-input" type="text" placeholder="Say something… (type /ai to ask the table AI)" maxlength="500" style="flex:1; padding:6px 8px; border:1px solid #e6e8f0; border-radius:6px;"/>
+          <input id="chat-input" type="text" placeholder="Type @ai to ask AI, or chat with players…" maxlength="500" style="flex:1; padding:6px 8px; border:1px solid #e6e8f0; border-radius:6px;"/>
           <button type="submit">Send</button>
         </form>
       </div>

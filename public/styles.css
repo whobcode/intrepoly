@@ -29,7 +29,7 @@ td {
 #setup {
 	display: block;
 	max-width: 680px;
-	margin: 10vh auto;
+	margin: 80px auto 40px;
 	background: var(--surface);
 	color: #102a43;
 	padding: 24px 28px;
@@ -61,9 +61,9 @@ td {
 #moneybarwrap {
     position: fixed;
     width: 240px;
-    top: 60px;
+    top: 62px;
     right: 0px;
-    bottom: 120px;
+    bottom: 55px;
     overflow-y: auto;
     -webkit-user-select: none;
     user-select: none;
@@ -86,16 +86,16 @@ td {
 
 #boardwrap {
     position: fixed;
-    top: 110px;
-    left: 250px;
+    top: 62px;
+    left: 220px;
     right: 250px;
-    bottom: 110px;
+    bottom: 55px;
     display: none; /* shown with board */
     justify-content: center;
     align-items: center;
     overflow: hidden;
     box-sizing: border-box;
-    padding: 10px;
+    padding: 5px;
 }
 
 #board {
@@ -120,17 +120,19 @@ td {
 #control {
 	position: fixed;
 	left: 0;
-	top: 60px;
-	width: 240px;
-	bottom: 120px;
+	right: 0;
+	bottom: 0;
+	width: 100%;
+	height: auto;
+	max-height: 50px;
 	z-index: 100;
-	border-right: 2px solid #ccc;
-	padding: 0;
+	border-top: 1px solid #ccc;
+	padding: 2px 8px;
 	display: none;
 	background-color: var(--surface);
 	margin: 0;
 	border-radius: 0;
-	overflow-y: auto;
+	overflow: hidden;
 	box-sizing: border-box;
 }
 
@@ -291,8 +293,8 @@ input[type="button"]:active, button:active {
 
 .die {
 	display: none;
-	margin: 5px;
-	float: left;
+	margin: 3px;
+	vertical-align: middle;
 }
 
 .die-no-img {
@@ -346,27 +348,28 @@ input[type="button"]:active, button:active {
 .cell-center img { width: 24px; height: 24px; display: block; }
 
 .cell-color-band {
-    position: absolute;
-    z-index: 2;
+    display: none; /* Hide the band - cell itself will be colored */
 }
 .band-horizontal {
-    height: 10px;
-    width: 100%;
-    left: 0;
+    display: none;
 }
 .band-vertical {
-    width: 10px;
-    height: 100%;
-    top: 0;
+    display: none;
+}
+
+/* Color the entire cell when it has a band color */
+.cell[data-band-color] {
+    background-color: var(--cell-band-color, #fffdf7);
 }
 
 .board-center {
-	width: 370px;
 	border: none;
-	vertical-align: bottom;
+	vertical-align: middle;
 	background-repeat: no-repeat;
-	background-size: auto 30px;
+	background-size: cover;
+	background-position: center;
 	background-color: #f7fbff;
+	position: relative;
 }
 
 /* Scaled down for compact layout */
@@ -413,40 +416,92 @@ input[type="button"]:active, button:active {
 .money-bar-arrow {
 	height: 30px;
 	width: 30px;
+	transform: scaleX(-1);
 }
 /* pruned legacy property tables */
 
 /* pruned legacy stats/trade cells */
 
+/* Left sidebar container for logs and game info */
+#left-sidebar {
+    position: fixed;
+    left: 0;
+    top: 62px;
+    width: 210px;
+    bottom: 55px;
+    overflow-y: auto;
+    z-index: 50;
+    padding: 8px;
+    box-sizing: border-box;
+    display: none;
+}
+
 /* Event log */
 #eventlog {
     display: none;
-    max-width: 680px;
-    margin: 0 auto 40px;
     background: var(--surface);
     color: #102a43;
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-left: 4px solid var(--primary);
     border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.10);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+    margin-bottom: 10px;
 }
 #eventlog h3 {
-    margin: 0 0 8px;
-    font-size: 16px;
+    margin: 0 0 6px;
+    font-size: 14px;
 }
 #eventlog-list {
     list-style: none;
     margin: 0;
     padding: 0;
-    max-height: 180px;
+    max-height: 150px;
     overflow-y: auto;
 }
 #eventlog-list li {
-    padding: 6px 0;
+    padding: 4px 0;
     border-bottom: 1px solid #e6e8f0;
-    font-size: 13px;
+    font-size: 11px;
 }
 #eventlog-list li:last-child { border-bottom: none; }
+
+/* Game stats panel */
+#gamestats {
+    background: var(--surface);
+    color: #102a43;
+    padding: 10px 12px;
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+}
+#gamestats h3 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    color: var(--accent);
+}
+#gamestats-content {
+    font-size: 12px;
+    line-height: 1.5;
+}
+#gamestats .stat-row {
+    padding: 4px 0;
+    border-bottom: 1px solid #e6e8f0;
+}
+#gamestats .stat-row:last-child {
+    border-bottom: none;
+}
+#gamestats .stat-label {
+    font-weight: 600;
+    color: #555;
+}
+#gamestats .banker-message {
+    margin-top: 8px;
+    padding: 8px;
+    background: #f6f8ff;
+    border-radius: 6px;
+    font-style: italic;
+    font-size: 11px;
+}
 
 .cell-anchor {
 	width: 100%;
@@ -563,16 +618,17 @@ input[type="button"]:active, button:active {
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 50px;
+	height: 20px;
 	background: linear-gradient(135deg, #c32222, #8a1818);
-	border-bottom: 2px solid #7a1515;
+	border-bottom: 1px solid #7a1515;
 	display: flex;
-	justify-content: space-between;
+	justify-content: flex-end;
 	align-items: center;
-	padding: 8px 12px;
+	padding: 0 8px;
 	z-index: 1001;
 	box-sizing: border-box;
 	color: white;
+	font-size: 10px;
 }
 
 #topbar > div {
@@ -684,9 +740,9 @@ input[type="button"]:active, button:active {
 #chatbox {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: 60px;
   width: 320px;
-  max-height: 50vh;
+  max-height: 40vh;
   display: flex;
   flex-direction: column;
   border: 1px solid #ccc;
@@ -718,33 +774,41 @@ input[type="button"]:active, button:active {
     overflow-x: auto;
   }
 
+  #left-sidebar {
+    width: 180px;
+  }
+
   #boardwrap {
-    top: 110px;
-    left: 150px;
-    right: 150px;
-    bottom: 100px;
-    padding: 8px;
+    top: 72px;
+    left: 190px;
+    right: 160px;
+    bottom: 80px;
+    padding: 5px;
   }
 
   #moneybarwrap {
     width: 150px;
-    top: 110px;
-    bottom: 100px;
+    top: 72px;
+    bottom: 80px;
   }
 
   #control {
-    width: 150px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 80px;
   }
 
   #control-header { font-size: 12px; padding: 6px; }
   .control-button { font-size: 11px; padding: 6px 8px; }
 
   #topbar {
-    height: 50px;
-    padding: 6px 8px;
+    height: 25px;
+    padding: 4px 8px;
   }
 
-  #topbar button { padding: 6px 8px; font-size: 12px; }
+  #topbar button { padding: 4px 8px; font-size: 11px; }
 
   .board-corner { width: 40px; height: 40px; }
   .board-top { width: 28px; height: 40px; }
@@ -781,51 +845,55 @@ input[type="button"]:active, button:active {
     overflow-x: hidden;
   }
 
+  #setup {
+    margin: 80px auto 40px;
+  }
+
   #topbar {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: 45px;
-    padding: 6px 8px;
+    height: 25px;
+    padding: 4px 8px;
     z-index: 1001;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   #topbar button {
-    padding: 6px 8px;
-    font-size: 11px;
-    min-width: 48px;
-    min-height: 48px;
+    padding: 4px 6px;
+    font-size: 10px;
+    min-width: 40px;
+    min-height: 24px;
   }
 
   #ai-toolbar {
     position: fixed;
-    top: 45px;
+    top: 25px;
     left: 0;
     right: 0;
-    height: 45px;
+    height: 40px;
     z-index: 1000;
-    padding: 6px 8px;
+    padding: 4px 8px;
     font-size: 11px;
   }
 
   #ai-toolbar select {
     width: 100%;
-    padding: 6px 4px;
+    padding: 4px 4px;
     font-size: 11px;
-    min-height: 48px;
+    min-height: 32px;
   }
 
   #boardwrap {
     position: fixed;
-    top: 90px;
+    top: 65px;
     left: 0;
     right: 0;
-    bottom: 80px;
+    bottom: 100px;
     display: none;
     justify-content: center;
     align-items: center;
@@ -841,7 +909,8 @@ input[type="button"]:active, button:active {
     left: 0;
     right: 0;
     width: 100%;
-    height: 80px;
+    height: auto;
+    max-height: 100px;
     top: auto;
     background: #fff;
     border-top: 2px solid #ccc;
@@ -876,9 +945,9 @@ input[type="button"]:active, button:active {
 
   #moneybarwrap {
     position: fixed;
-    bottom: 80px;
+    bottom: 100px;
     right: 0;
-    top: 90px;
+    top: 65px;
     width: 100%;
     max-width: 280px;
     left: auto;
@@ -1018,15 +1087,16 @@ input[type="button"]:active, button:active {
 /* Landscape mode adjustments */
 @media (max-height: 600px) {
   #topbar {
-    height: 40px;
+    height: 20px;
   }
 
   #ai-toolbar {
-    height: 40px;
+    height: 35px;
+    top: 20px;
   }
 
   #boardwrap {
-    top: 80px;
+    top: 55px;
     bottom: 60px;
   }
 
@@ -1036,7 +1106,11 @@ input[type="button"]:active, button:active {
 
   #moneybarwrap {
     bottom: 60px;
-    top: 80px;
+    top: 55px;
+  }
+
+  #left-sidebar {
+    top: 55px;
   }
 
   .board-corner { width: 25px; height: 25px; }

@@ -45,6 +45,7 @@ function setupEventListeners() {
   const toggleCameraBtn = document.getElementById('toggle-camera-btn');
   const shareScreenBtn = document.getElementById('share-screen-btn');
   const leaveVideoBtn = document.getElementById('leave-video-btn');
+  const sidebarJoinBtn = document.getElementById('sidebar-join-video-btn');
 
   if (toggleVideoBtn) {
     toggleVideoBtn.addEventListener('click', toggleVideo);
@@ -60,6 +61,10 @@ function setupEventListeners() {
   }
   if (leaveVideoBtn) {
     leaveVideoBtn.addEventListener('click', leaveVideo);
+  }
+  // Sidebar video join button
+  if (sidebarJoinBtn) {
+    sidebarJoinBtn.addEventListener('click', toggleVideo);
   }
 }
 
@@ -124,15 +129,17 @@ function stopVideo() {
     screenStream = null;
   }
 
-  // Remove local video
+  // Remove local video from both grids
   const localVideo = document.getElementById('video-local');
-  if (localVideo) {
-    localVideo.remove();
-  }
+  if (localVideo) localVideo.remove();
+  const sidebarLocalVideo = document.getElementById('sidebar-video-local');
+  if (sidebarLocalVideo) sidebarLocalVideo.remove();
 
-  // Close all peer connections
-  peerConnections.forEach((pc) => {
+  // Close all peer connections and remove sidebar videos
+  peerConnections.forEach((pc, playerId) => {
     pc.close();
+    const sidebarRemote = document.getElementById(`sidebar-video-${playerId}`);
+    if (sidebarRemote) sidebarRemote.remove();
   });
   peerConnections.clear();
 
@@ -144,6 +151,10 @@ function stopVideo() {
   // Update UI
   updateVideoControls();
   hideVideoPanel();
+
+  // Update sidebar button
+  const sidebarBtn = document.getElementById('sidebar-join-video-btn');
+  if (sidebarBtn) sidebarBtn.textContent = 'Join';
 
   console.log('Video chat stopped');
 }
@@ -266,6 +277,11 @@ export async function handleWebRTCMessage(message) {
     case 'PEER_LEFT':
       handlePeerLeft(message.payload);
       break;
+    case 'EXISTING_VIDEO_PEERS':
+      // When we join, we receive a list of existing video participants
+      // We should create connections to each of them (they will also connect to us)
+      await handleExistingPeers(message.payload);
+      break;
     case 'WEBRTC_OFFER':
       await handleOffer(message.payload);
       break;
@@ -275,6 +291,22 @@ export async function handleWebRTCMessage(message) {
     case 'WEBRTC_ICE':
       await handleIceCandidate(message.payload);
       break;
+  }
+}
+
+// Handle list of existing video peers when we join
+async function handleExistingPeers(payload) {
+  const { peers } = payload;
+  if (!Array.isArray(peers) || !localStream || !isVideoActive) return;
+
+  console.log(`Received ${peers.length} existing video peers`);
+
+  // Connect to each existing peer
+  for (const peer of peers) {
+    if (peer && peer.playerId !== state.playerId) {
+      console.log(`Connecting to existing peer: ${peer.playerName} (${peer.playerId})`);
+      await createPeerConnection(peer.playerId, peer.playerName, true);
+    }
   }
 }
 
@@ -445,55 +477,111 @@ async function handleIceCandidate(payload) {
 
 // Add local video to UI
 function addLocalVideo(stream) {
+  // Add to main video grid
   const videoGrid = document.getElementById('video-grid');
-  if (!videoGrid) return;
+  if (videoGrid) {
+    const videoWrapper = document.createElement('div');
+    videoWrapper.className = 'video-wrapper';
+    videoWrapper.id = 'video-local';
 
-  const videoWrapper = document.createElement('div');
-  videoWrapper.className = 'video-wrapper';
-  videoWrapper.id = 'video-local';
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.muted = true; // Mute local audio to prevent feedback
+    video.playsInline = true;
+    video.srcObject = stream;
 
-  const video = document.createElement('video');
-  video.autoplay = true;
-  video.muted = true; // Mute local audio to prevent feedback
-  video.playsInline = true;
-  video.srcObject = stream;
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = 'You';
 
-  const label = document.createElement('div');
-  label.className = 'video-label';
-  label.textContent = 'You (Local)';
+    videoWrapper.appendChild(video);
+    videoWrapper.appendChild(label);
+    videoGrid.appendChild(videoWrapper);
+  }
 
-  videoWrapper.appendChild(video);
-  videoWrapper.appendChild(label);
-  videoGrid.appendChild(videoWrapper);
+  // Also add to sidebar video grid
+  const sidebarGrid = document.getElementById('sidebar-video-grid');
+  if (sidebarGrid) {
+    const thumbWrapper = document.createElement('div');
+    thumbWrapper.className = 'sidebar-video-thumb';
+    thumbWrapper.id = 'sidebar-video-local';
+    thumbWrapper.style.cssText = 'position:relative; border-radius:4px; overflow:hidden; background:#1a1a1a;';
+
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    video.style.cssText = 'width:100%; height:60px; object-fit:cover;';
+
+    const label = document.createElement('div');
+    label.style.cssText = 'position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:9px; padding:2px 4px; text-align:center;';
+    label.textContent = 'You';
+
+    thumbWrapper.appendChild(video);
+    thumbWrapper.appendChild(label);
+    sidebarGrid.appendChild(thumbWrapper);
+  }
+
+  // Update sidebar button
+  const sidebarBtn = document.getElementById('sidebar-join-video-btn');
+  if (sidebarBtn) sidebarBtn.textContent = 'Leave';
 }
 
 // Add remote video to UI
 function addRemoteVideo(playerId, playerName, stream) {
+  // Add to main video grid
   const videoGrid = document.getElementById('video-grid');
-  if (!videoGrid) return;
+  if (videoGrid) {
+    // Remove existing video if any
+    let videoWrapper = document.getElementById(`video-${playerId}`);
+    if (videoWrapper) {
+      videoWrapper.remove();
+    }
 
-  // Remove existing video if any
-  let videoWrapper = document.getElementById(`video-${playerId}`);
-  if (videoWrapper) {
-    videoWrapper.remove();
+    videoWrapper = document.createElement('div');
+    videoWrapper.className = 'video-wrapper';
+    videoWrapper.id = `video-${playerId}`;
+
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = playerName;
+
+    videoWrapper.appendChild(video);
+    videoWrapper.appendChild(label);
+    videoGrid.appendChild(videoWrapper);
   }
 
-  videoWrapper = document.createElement('div');
-  videoWrapper.className = 'video-wrapper';
-  videoWrapper.id = `video-${playerId}`;
+  // Also add to sidebar video grid
+  const sidebarGrid = document.getElementById('sidebar-video-grid');
+  if (sidebarGrid) {
+    let thumbWrapper = document.getElementById(`sidebar-video-${playerId}`);
+    if (thumbWrapper) thumbWrapper.remove();
 
-  const video = document.createElement('video');
-  video.autoplay = true;
-  video.playsInline = true;
-  video.srcObject = stream;
+    thumbWrapper = document.createElement('div');
+    thumbWrapper.className = 'sidebar-video-thumb';
+    thumbWrapper.id = `sidebar-video-${playerId}`;
+    thumbWrapper.style.cssText = 'position:relative; border-radius:4px; overflow:hidden; background:#1a1a1a;';
 
-  const label = document.createElement('div');
-  label.className = 'video-label';
-  label.textContent = playerName;
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    video.style.cssText = 'width:100%; height:60px; object-fit:cover;';
 
-  videoWrapper.appendChild(video);
-  videoWrapper.appendChild(label);
-  videoGrid.appendChild(videoWrapper);
+    const label = document.createElement('div');
+    label.style.cssText = 'position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:9px; padding:2px 4px; text-align:center;';
+    label.textContent = playerName;
+
+    thumbWrapper.appendChild(video);
+    thumbWrapper.appendChild(label);
+    sidebarGrid.appendChild(thumbWrapper);
+  }
 }
 
 // Update video control buttons
