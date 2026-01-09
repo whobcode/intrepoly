@@ -1,339 +1,227 @@
 # Resume Conversation - Intrepoly Project
 
-## 📍 Current Status (2025-12-02)
+## 📍 Current Status (2025-12-29)
 
 ### ✅ Completed Tasks
 
 1. **Fixed D1 Database Error** ✅
    - Changed `.exec()` to `.prepare().run()` in `src/db.ts`
    - Database initialization now works correctly
-   - Files modified: `src/db.ts`
 
 2. **Domain Updated** ✅
    - Changed from `monopoly.hwmnbn.me` → `intrepoly.hwmnbn.me`
-   - Files modified: `wrangler.jsonc`, `package.json`, `README.md`
 
 3. **Port Fixed** ✅
    - Changed from 444 (requires root) → 8787
-   - Added `npx` to all wrangler commands
-   - Files modified: `wrangler.jsonc`, `package.json`
 
 4. **Dependencies Fixed** ✅
-   - Removed invalid `@whob/monopoly-core` package
-   - Created local `src/board-data.ts` with all Monopoly game data (40 squares, 16 chance cards, 17 community chest cards)
-   - Files created: `src/board-data.ts`
-   - Files modified: `src/types.ts`, `src/board.ts`, `src/game.ts`
+   - Created local `src/board-data.ts` with all Monopoly game data
 
 5. **WebRTC Video Chat Added** ✅
    - Peer-to-peer video connections for 2-8 players
-   - Files created: `public/js/video-chat.js`, `VIDEO_CHAT_README.md`
-   - Files modified: `src/game.ts`, `public/index.html`, `public/js/main.js`, `public/js/api.js`
+   - Video thumbnails in sidebar under logs
 
-6. **Bug Scan Completed** ✅
-   - Found 35 bugs (4 critical, 6 high severity)
-   - Admin bypass for `whobcode13` is working (src/index.ts:617-618)
-   - Full report available in agent output
+6. **Menu Page & Game Flow** ✅ (NEW - 2025-12-29)
+   - Created `public/menu.html` - Post-login menu with Start Game button
+   - Login now redirects to menu page
+   - Player count selection (4 or 8 players) after clicking Start Game
+   - Removed Start Game button from in-game controls
 
-7. **Documentation Created** ✅
-   - `ARCHITECTURE_COMPARISON.md` - Why this is complex vs Ollama
-   - `FIXES_AND_SETUP.md` - Comprehensive setup guide
-   - `COMEBACK.md` (this file)
+7. **Named AI Agents with Personalities** ✅ (NEW - 2025-12-29)
+   - 7 unique AI characters with distinct personalities:
+     - **Tony** (crimson) - Wall Street swagger, ambition quotes
+     - **Raven** (purple) - Philosophical, fate/patience wisdom
+     - **Kierra** (gold) - Inspirational, perseverance/loyalty
+     - **Kitra** (teal) - Analytical, mathematical precision
+     - **Jubilee** (orange) - Charismatic, bold creativity
+     - **Niccollus** (navy) - Machiavellian, power dynamics
+     - **Shay** (lime) - Zen master, patience/balance
+   - 4-player games: Tony, Raven, Kierra
+   - 8-player games: All 7 agents
 
-8. **Ollama Package Installed** ✅
-   - `npm install ollama` completed
-   - Ready to integrate Ollama AI
+8. **AI Chat Enhanced** ✅ (NEW - 2025-12-29)
+   - AI agents use unique personality prompts
+   - Share strategic Monopoly tips based on game events
+   - Generate quotes about life, love, loyalty with explanations
+
+9. **Dynamic Player Replacement** ✅ (NEW - 2025-12-29)
+   - New human players replace random AI when joining
+   - Host sets player count, joiners bypass selection
+   - Game remembers `maxPlayers` and `hostPlayerId`
+
+10. **Chat & Event Log Visibility** ✅ (NEW - 2025-12-29)
+    - Fixed CSS selectors (#chatbox → #chat)
+    - Event log and chat now properly shown when game starts
+
+11. **Go Arrow Fixed** ✅
+    - Arrow SVG flipped with CSS `transform: scaleX(-1)`
+
+12. **Unified SSO for *.hwmnbn.me** ✅ (NEW - 2025-12-30)
+    - Implemented cross-subdomain Single Sign-On
+    - Session cookies set to `.hwmnbn.me` domain
+    - New SSO endpoints:
+      - `GET/POST /auth/sso/validate` - Validate session from any subdomain
+      - `GET /auth/sso/config` - Get SSO integration config
+    - Full CORS support for all auth endpoints
+    - Other *.hwmnbn.me sites can now:
+      - Call `/auth/sso/validate` with `credentials: 'include'`
+      - OR bind to the same `monopolyd1` D1 database
+    - Created `SSO.md` documentation for integration
 
 ---
 
-### ⚠️ In Progress
+### ⚠️ Pending / In Progress
 
-1. **Switching to Ollama AI** (IN PROGRESS)
-   - Need to replace Cloudflare AI with Ollama API
-   - Ollama API key found: `3064d04dd4dc40eaac63b229a5814014.TllzNSbjEly9-IaAJzqbX4pt`
-   - Package installed: `ollama@^0.6.3`
-   - **Next steps:**
-     - Update `src/index.ts` to use Ollama instead of Cloudflare AI
-     - Add OLLAMA_API_KEY to `wrangler.jsonc` vars
-     - Test AI endpoints with Ollama
+1. **Ollama AI Integration**
+   - Package installed but not fully integrated
+   - Currently using Cloudflare AI models
 
-2. **GAME_SOCKETS not connected** (PENDING)
-   - Need to create the game-sockets worker
-   - Or remove the service binding if not needed
+2. **GAME_SOCKETS Binding**
+   - Service binding exists but worker not created
+   - Game still works via Durable Objects directly
 
----
-
-### ❌ Not Implemented
-
-1. **Email Notifications**
-   - Requires external service (Mailgun, SendGrid, Resend)
-   - See `FIXES_AND_SETUP.md` for integration options
-
-2. **Critical Bugs**
-   - 35 bugs identified (see bug scanner output)
-   - Most critical: Auction alarm race condition, SQL injection
+3. **Email Notifications**
+   - Email templates exist in CLAUDE.md
+   - Need to integrate with signup/login flow
 
 ---
 
-## 🚀 How to Resume
+## 🎮 Game Flow (Updated)
 
-### Step 1: Navigate to Project
+```
+1. User visits / (index.html)
+   ↓
+2. Not logged in? → Show login modal
+   Logged in without game hash? → Redirect to /menu.html
+   ↓
+3. Menu Page (/menu.html):
+   - Enter display name & color
+   - Click "Start New Game" → Choose 4 or 8 players
+   - Or join with game code
+   ↓
+4. Redirected to /#game-id
+   - Host: Game fills with named AI agents
+   - Joiner: Replaces a random AI
+   ↓
+5. Game plays with chat, video, AI banter
+```
+
+---
+
+## 🤖 AI Agent Details
+
+| Agent | Personality | Quote Style |
+|-------|-------------|-------------|
+| Tony | Wall Street trader | Ambition, power, deals |
+| Raven | Philosopher | Fate, patience, mystery |
+| Kierra | Champion | Perseverance, loyalty, honor |
+| Kitra | Analyst | Math, probability, logic |
+| Jubilee | Creative | Bold moves, joy, risk |
+| Niccollus | Machiavelli | Power, leverage, strategy |
+| Shay | Zen master | Balance, peace, patience |
+
+Each agent uses a different Cloudflare AI model for variety.
+
+---
+
+## 📁 Key Files (Updated)
+
+### New Files
+- `public/menu.html` - Post-login menu page
+- `SSO.md` - Cross-subdomain SSO integration documentation
+
+### Modified Files (2025-12-29 & 2025-12-30)
+- `public/js/main.js` - Login redirects, sessionStorage, auto-start
+- `public/js/api.js` - Pass playerCount/isHost in join
+- `public/js/ui.js` - Show eventlog/chat on game start
+- `public/index.html` - Removed Start Game button from controls
+- `public/styles.css` - Fixed chat CSS selectors
+- `src/game.ts` - Named AI agents, player replacement, personalities
+- `src/board-data.ts` - Added personality, maxPlayers, hostPlayerId fields
+- `src/index.ts` - SSO endpoints, CORS support for all auth routes
+
+---
+
+## 🚀 Quick Start
+
 ```bash
+# Navigate to project
 cd /home/marswc/github/intrepoly
-```
 
-### Step 2: Check What's Running
-```bash
-# Kill any existing dev servers
+# Kill any existing servers
 pkill -9 -f wrangler
-pkill -9 -f workerd
-pkill -9 -f concurrently
-```
 
-### Step 3: Start Dev Server
-```bash
-# Start with auto DB init
-npm run dev:with-init
-```
-
-Expected output:
-```
-[init] DB init ok (dev)
-[wrangler] ⎔ Starting local server...
-[wrangler] [wrangler:info] Ready on http://localhost:8787
-```
-
----
-
-## 📋 Next Tasks to Complete
-
-### Immediate (In Progress):
-1. **Complete Ollama AI Integration**
-   - Modify `src/index.ts` AI endpoints to use Ollama
-   - Add Ollama config to `wrangler.jsonc`
-   - Test with: `curl http://localhost:8787/api/ai/chat -d '{"prompt":"Hello"}'`
-
-### High Priority:
-2. **Fix GAME_SOCKETS Connection**
-   - Option A: Create a separate game-sockets worker
-   - Option B: Remove service binding and use DO WebSocket directly
-   - See: https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/
-
-3. **Fix Critical Security Bugs**
-   - Remove/protect hardcoded admin bypass (src/index.ts:617-618)
-   - Fix auction alarm race condition
-   - Fix SQL injection vulnerability
-   - See bug scanner output for details
-
-### Medium Priority:
-4. **Test Frontend Authentication**
-   - Verify login buttons work in browser
-   - Check `public/login.html`, `public/signup.html`
-   - Test admin login with whobcode13
-
-5. **Add Email Service** (Optional)
-   - Choose: Mailgun, SendGrid, or Resend
-   - See `FIXES_AND_SETUP.md` for implementation guide
-
----
-
-## 🔑 Important Information
-
-### API Keys
-- **Ollama API Key:** `3064d04dd4dc40eaac63b229a5814014.TllzNSbjEly9-IaAJzqbX4pt`
-  - Located in: `~/.bashrc`
-  - Export with: `export OLLAMA_API_KEY="..."`
-
-- **Auth Secret:** `14b9219608cdc7d5980ae10aec1f75a36521298c7e5de99cf9dcfc1f7a695ece`
-  - Located in: `wrangler.jsonc`
-
-### Admin Access
-- **Username:** `whobcode13`
-- **Email:** `whobcode13@example.com`
-- **Password:** ANY (bypassed in code)
-- **Bypass location:** `src/index.ts:617-618`
-
-### Ports
-- **Dev server:** `http://localhost:8787`
-- **WebSocket:** `ws://localhost:8787/api/game/:id/websocket`
-
----
-
-## 📁 Key File Locations
-
-### Configuration
-- `wrangler.jsonc` - Cloudflare Workers config (domain, routes, bindings)
-- `package.json` - npm scripts and dependencies
-
-### Source Code
-- `src/index.ts` - Main Worker entry point, routing, AI endpoints
-- `src/game.ts` - Game Durable Object (game logic, WebSocket)
-- `src/db.ts` - Database initialization and queries
-- `src/auth.ts` - Authentication (JWT, cookies, password hashing)
-- `src/board-data.ts` - Monopoly game data (40 squares, cards)
-
-### Frontend
-- `public/index.html` - Main game page
-- `public/js/video-chat.js` - WebRTC implementation
-- `public/js/main.js` - Game client
-- `public/js/auth.js` - Auth client-side
-
-### Documentation
-- `README.md` - Original project documentation
-- `ARCHITECTURE_COMPARISON.md` - Why this is complex vs Ollama
-- `FIXES_AND_SETUP.md` - Setup and troubleshooting guide
-- `VIDEO_CHAT_README.md` - WebRTC documentation
-- `COMEBACK.md` (this file) - Resume guide
-
----
-
-## 🐛 Known Issues
-
-### Critical
-1. **Hardcoded admin bypass** - Security risk (src/index.ts:617-618)
-2. **Auction alarm race condition** - Can corrupt game state
-3. **SQL injection vulnerability** - In stats update (src/game.ts:736-737)
-4. **GAME_SOCKETS not connected** - Service binding issue
-
-### High
-5. Player array index/ID confusion
-6. Missing null checks in trade execution
-7. Doubles count desynchronization
-8. Unvalidated property transfers
-
-See full bug report in agent output for all 35 bugs.
-
----
-
-## 💬 Conversation Context
-
-### What You Asked For:
-1. Fix dependencies and get project running ✅
-2. Scan for bugs ✅
-3. Add WebRTC video chat (from ~/code/ollama reference) ✅
-4. Create 4-agent system with overseer for context management ✅
-5. Change domain to intrepoly.hwmnbn.me ✅
-6. Fix port issue (444 → 8787) ✅
-7. Switch to Ollama AI instead of Cloudflare AI ⏳ (IN PROGRESS)
-
-### Agent System Created:
-- **Setup Agent:** Fixed dependencies ✅
-- **Bug Scanner Agent:** Found 35 bugs ✅
-- **WebRTC Agent:** Implemented video chat ✅
-- **Overseer Agent:** Context management system ✅
-
----
-
-## 🔄 How to Continue This Conversation
-
-### In Claude Code:
-
-1. **Reference this file:**
-   ```
-   "I'm resuming work on intrepoly. Please read COMEBACK.md for context."
-   ```
-
-2. **Specific task:**
-   ```
-   "Continue the Ollama AI integration we started. The API key is in ~/.bashrc"
-   ```
-
-3. **Bug fixes:**
-   ```
-   "Let's fix the critical bugs from the bug scanner report"
-   ```
-
-4. **Testing:**
-   ```
-   "Help me test the authentication system in the browser"
-   ```
-
----
-
-## 📝 Quick Commands Reference
-
-```bash
 # Start dev server
 npm run dev:with-init
 
-# Kill dev server
-pkill -9 -f wrangler && pkill -9 -f workerd
-
-# Check server status
-curl http://localhost:8787/auth/whoami
-
-# Reset local database
-npm run db:reset:local
-
-# Deploy to production
-npm run deploy:with-init
-
-# Create admin user
-curl -X POST http://localhost:8787/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"whobcode13@example.com","username":"whobcode13","password":"anything"}'
-
-# Test Ollama integration (after completion)
-curl -X POST http://localhost:8787/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Hello from Ollama!"}'
+# Open in browser
+open http://localhost:8787
 ```
 
 ---
 
-## 🎯 Recommended Next Session
+## 🔑 Important Info
 
-1. **Complete Ollama Integration** (30-45 minutes)
-   - Update AI endpoints in `src/index.ts`
-   - Test with curl commands
-   - Verify game AI suggestions work
+### Admin Access
+- **Username:** `whobcode13`
+- **Password:** ANY (bypassed in code)
 
-2. **Fix GAME_SOCKETS** (15-30 minutes)
-   - Decide: separate worker or remove binding
-   - Update WebSocket routing if needed
+### URLs
+- **Dev:** `http://localhost:8787`
+- **Prod:** `https://intrepoly.hwmnbn.me`
+- **Menu:** `/menu.html`
+- **Game:** `/#game-id`
 
-3. **Test Everything** (30 minutes)
-   - Start server: `npm run dev:with-init`
-   - Open browser: http://localhost:8787
-   - Test login, game creation, video chat
-   - Verify Ollama AI works
+---
+
+## 📋 Next Tasks
+
+### High Priority
+1. **Test the new game flow** in browser
+2. **Deploy to production** with `npm run deploy:with-init`
+3. **Verify AI agent chat** works with personalities
+
+### Medium Priority
+4. **Integrate email notifications** from CLAUDE.md templates
+5. **Fix remaining bugs** from bug scanner
+
+### Low Priority
+6. **Complete Ollama integration** as alternative to Cloudflare AI
+7. **Create GAME_SOCKETS worker** or remove binding
 
 ---
 
 ## 💾 Save Point
 
-**Date:** 2025-12-02
-**Time:** Approximately 17:50 UTC
+**Date:** 2025-12-29
 **Branch:** main
-**Commit:** Use `git status` to see uncommitted changes
 
-**Modified files since last commit:**
-- `src/db.ts` - D1 fixes
-- `src/board-data.ts` - NEW
-- `wrangler.jsonc` - Port and domain
-- `package.json` - Port, domain, npx, ollama package
-- `README.md` - Domain updates
-- `public/js/video-chat.js` - NEW
-- `src/game.ts` - WebRTC signaling
-- `public/index.html` - Video UI
-- Multiple docs: ARCHITECTURE_COMPARISON.md, FIXES_AND_SETUP.md, VIDEO_CHAT_README.md, COMEBACK.md
+**Recent Changes:**
+- Menu page with player count selection
+- 7 named AI agents with unique personalities
+- Dynamic AI replacement when humans join
+- Enhanced AI chat with quotes and tips
+- Fixed chat/eventlog visibility
 
-**To commit progress:**
+**To commit:**
 ```bash
 git add -A
-git commit -m "feat: Fix D1 init, add WebRTC, switch to Ollama, update domain
+git commit -m "feat: Add menu page, named AI agents, and game flow improvements
 
-- Fixed D1 database initialization error
-- Added WebRTC video chat for 2-8 players
-- Installed Ollama package for AI integration
-- Changed domain from monopoly to intrepoly
-- Changed port from 444 to 8787
-- Created comprehensive documentation
-- Bug scan identified 35 issues
+- Created menu.html for post-login game setup
+- Added 7 named AI agents (Tony, Raven, Kierra, Kitra, Jubilee, Niccollus, Shay)
+- Each AI has unique personality and quote style
+- Player count selection (4 or 8) with AI auto-fill
+- New players replace random AI when joining
+- Enhanced AI chat with strategic tips and quotes
+- Fixed chat/eventlog visibility on game start
+- Removed Start Game from in-game controls
 
-🤖 Generated with Claude Code
-Co-Authored-By: Claude <noreply@anthropic.com>"
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-**Ready to resume!** Just open this file and continue where we left off. 🚀
+**Ready to resume!** The game now has a proper menu flow and personality-rich AI opponents. 🎲

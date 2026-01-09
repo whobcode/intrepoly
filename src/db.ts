@@ -180,6 +180,20 @@ export async function findUserByEmail(monopolyd1: D1Database, email: string) {
 }
 
 /**
+ * Finds a user by either their email or username.
+ * @param monopolyd1 The D1 database instance.
+ * @param emailOrUsername The email address or username to search for.
+ * @returns A promise that resolves to the user object if found, otherwise null.
+ */
+export async function findUserByEmailOrUsername(monopolyd1: D1Database, emailOrUsername: string) {
+  const normalized = emailOrUsername.trim().toLowerCase();
+  const row = await monopolyd1.prepare('SELECT * FROM users WHERE LOWER(email)=? OR LOWER(username)=?')
+    .bind(normalized, normalized)
+    .first();
+  return row as any;
+}
+
+/**
  * Creates a new user with an email, username, and hashed password.
  * @param monopolyd1 The D1 database instance.
  * @param email The user's email address.

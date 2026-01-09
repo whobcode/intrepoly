@@ -31,9 +31,11 @@
     "db:reset:local": "bash -lc \"find .wrangler/state/v3/d1 -name \"*.sqlite\" -delete 2>/dev/null || true\"; npm run db:setup:local"
   },
   "devDependencies": {
+    "agents": "^0.2.30",
     "concurrently": "^9.2.1",
     "localtunnel": "^2.0.2",
     "ngrok": "^5.0.0-beta.2",
+    "typescript": "^5.9.3",
     "wrangler": "^4.40.2",
     "ws": "^8.18.0"
   },

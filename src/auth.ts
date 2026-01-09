@@ -76,19 +76,23 @@ export async function verifySession(secret: string, token: string): Promise<Sess
 }
 
 /**
- * Generates a `Set-Cookie` header string.
+ * Generates a `Set-Cookie` header string with cross-domain support.
  * @param name The name of the cookie.
  * @param value The value of the cookie.
- * @param opts Options for the cookie, such as `maxAge`.
+ * @param opts Options for the cookie, such as `maxAge` and `domain`.
  * @returns A string formatted for the `Set-Cookie` header.
  */
-export function setCookie(name: string, value: string, opts: { maxAge?: number } = {}): string {
+export function setCookie(name: string, value: string, opts: { maxAge?: number; domain?: string } = {}): string {
   const attrs = [
     `${name}=${value}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
   ];
+  // Always use cross-domain cookie for hwmnbn.me subdomains
+  const domain = opts.domain || '.hwmnbn.me';
+  attrs.push(`Domain=${domain}`);
+  attrs.push('Secure'); // Required for cross-domain cookies
   if (opts.maxAge) attrs.push(`Max-Age=${opts.maxAge}`);
   return attrs.join('; ');
 }

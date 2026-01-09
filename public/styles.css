@@ -347,6 +347,11 @@ input[type="button"]:active, button:active {
 }
 .cell-center img { width: 24px; height: 24px; display: block; }
 
+/* Flip the GO arrow to point in the opposite direction */
+#cell0 .cell-center img {
+    transform: scaleX(-1);
+}
+
 .cell-color-band {
     display: none; /* Hide the band - cell itself will be colored */
 }
@@ -736,29 +741,18 @@ input[type="button"]:active, button:active {
 .theme-brg #deed-header { background: var(--accent) !important; color: #fff !important; border-color: var(--border) !important; }
 .theme-brg .die-no-img { background: var(--bg) !important; color: var(--text) !important; border-color: var(--border) !important; }
 
-/* Chatbox */
-#chatbox {
-  position: fixed;
-  right: 16px;
-  bottom: 60px;
-  width: 320px;
-  max-height: 40vh;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background: #fff;
-  overflow: hidden;
-  z-index: 1002;
+/* Chat Panel (floating chat at bottom-right) */
+#chat {
+  display: none; /* Hidden by default, shown when game starts */
 }
-.theme-brg #chatbox { border-color: var(--border); background: var(--bg-soft); color: var(--text); }
-#chatbox-header { font-weight: bold; padding: 8px 10px; border-bottom: 1px solid #eee; }
-.theme-brg #chatbox-header { border-color: var(--border); }
-#chatbox-messages { flex: 1; overflow-y: auto; padding: 8px 10px; line-height: 1.3; font-size: 13px; }
-#chatbox-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #eee; }
-.theme-brg #chatbox-input { border-color: var(--border); }
-#chatbox-input input { flex: 1; padding: 6px 8px; }
-#chatbox-input button { padding: 6px 10px; }
+.theme-brg #chat { border-color: var(--border); background: var(--bg-soft); color: var(--text); }
+#chat-tab { font-weight: bold; }
+.theme-brg #chat-tab { border-color: var(--border); background: var(--bg-soft); }
+#chat-body { background: var(--surface, #fff); }
+.theme-brg #chat-body { background: var(--bg-soft); border-color: var(--border); }
+#chat-form { border-top: 1px solid #eee; }
+.theme-brg #chat-form { border-color: var(--border); }
+#chat-input { flex: 1; padding: 6px 8px; }
 .chat-line { margin: 3px 0; }
 .chat-name { font-weight: bold; margin-right: 6px; }
 .chat-banker .chat-name { color: #c32222; }
@@ -829,13 +823,13 @@ input[type="button"]:active, button:active {
   #moneybar { font-size: 10px; }
   #moneybar table { font-size: 10px; }
 
-  #chatbox {
+  #chat {
     width: 240px;
     max-height: 40vh;
     font-size: 12px;
   }
 
-  #chatbox-messages { font-size: 11px; }
+  #chat-body { font-size: 11px; }
 }
 
 /* Mobile (< 768px) */
@@ -1015,7 +1009,7 @@ input[type="button"]:active, button:active {
     line-height: 1;
   }
 
-  #chatbox {
+  #chat {
     position: fixed;
     bottom: 95px;
     right: 8px;
@@ -1025,9 +1019,9 @@ input[type="button"]:active, button:active {
     z-index: 90;
   }
 
-  #chatbox-messages { font-size: 10px; }
-  #chatbox-input input { font-size: 11px; }
-  #chatbox-input button { font-size: 10px; min-height: 40px; }
+  #chat-body { font-size: 10px; }
+  #chat-input { font-size: 11px; }
+  #chat-form button { font-size: 10px; min-height: 40px; }
 
   /* Player list toggle button (mobile) */
   #toggle-players {
@@ -1075,13 +1069,13 @@ input[type="button"]:active, button:active {
 
   .control-button { min-width: 50px; padding: 6px 4px; }
 
-  #chatbox {
+  #chat {
     width: 200px;
     max-height: 30vh;
     font-size: 10px;
   }
 
-  #chatbox-messages { font-size: 9px; }
+  #chat-body { font-size: 9px; }
 }
 
 /* Landscape mode adjustments */

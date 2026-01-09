@@ -1,12 +1,28 @@
 export function updateMoneybar(gameState) {
+  console.log(`[updateMoneybar] Called with ${gameState.players?.length || 0} players`, gameState.players);
+
+  // Hide all rows first
+  for (let i = 1; i <= 8; i++) {
+    const row = document.getElementById(`moneybarrow${i}`);
+    if (row) row.style.display = 'none';
+  }
+
+  // Show and update rows for active players
   for (const p of gameState.players) {
-    const pMoney = document.getElementById(`p${p.id + 1}money`);
-    const pName = document.getElementById(`p${p.id + 1}moneyname`);
-    if (pMoney && pName) {
+    const rowNum = p.id + 1;
+    const pMoney = document.getElementById(`p${rowNum}money`);
+    const pName = document.getElementById(`p${rowNum}moneyname`);
+    const pBar = document.getElementById(`p${rowNum}moneybar`);
+    const row = document.getElementById(`moneybarrow${rowNum}`);
+
+    if (pMoney && pName && pBar && row) {
       pMoney.textContent = p.money;
       pName.textContent = p.name;
-      document.getElementById(`p${p.id + 1}moneybar`).style.borderColor = p.color;
-      document.getElementById(`moneybarrow${p.id + 1}`).style.display = 'table-row';
+      pBar.style.borderColor = p.color;
+      row.style.display = 'table-row';
+      console.log(`[updateMoneybar] Updated row ${rowNum} for ${p.name} (${p.isHuman ? 'Human' : 'AI'}): $${p.money}`);
+    } else {
+      console.warn(`Missing moneybar elements for player ${p.id} (${p.name})`);
     }
   }
 }

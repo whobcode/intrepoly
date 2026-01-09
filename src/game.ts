@@ -130,7 +130,15 @@ export class Game implements DurableObject {
         const message: WebSocketMessage = JSON.parse(msg.data as string);
 
         if (message.action === 'join') {
-            await this.addPlayer(ws, message.payload.name, message.payload.color, message.payload.user, message.payload.email);
+            await this.addPlayer(
+              ws,
+              message.payload.name,
+              message.payload.color,
+              message.payload.user,
+              message.payload.email,
+              message.payload.playerCount,
+              message.payload.isHost
+            );
         } else {
           const playerId = this.playerIds.get(ws);
           if (playerId === undefined) {
@@ -172,15 +180,12 @@ export class Game implements DurableObject {
    * @param color The color of the player's token.
    * @param user The authenticated username, if available.
    * @param email The authenticated email, if available.
+   * @param playerCount The desired player count (4 or 8) - only from host.
+   * @param isHost Whether this is the host creating the game.
    * @returns A promise that resolves when the player has been added.
    */
-  async addPlayer(ws: WebSocket, name: string, color: string, user?: string, email?: string): Promise<void> {
+  async addPlayer(ws: WebSocket, name: string, color: string, user?: string, email?: string, playerCount?: number, isHost?: boolean): Promise<void> {
     if (!this.gameState) {
-        return;
-    }
-
-    if (this.gameState.players.length >= 8) {
-        ws.send(JSON.stringify({ error: 'Game is full.'}));
         return;
     }
 
@@ -194,9 +199,51 @@ export class Game implements DurableObject {
       }
     }
 
+    // Check if game is full (all human slots taken)
+    const humanCount = this.gameState.players.filter(p => p.isHuman).length;
+    const maxPlayers = this.gameState.maxPlayers || 8;
+
+    // If host and first player, set player count
+    if (isHost && this.gameState.players.length === 0 && playerCount) {
+      this.gameState.maxPlayers = playerCount;
+      console.log(`[HOST] Setting max players to ${playerCount}`);
+    }
+
+    // If game already has AI players and we're a new human joining, replace an AI
+    const aiPlayers = this.gameState.players.filter(p => !p.isHuman && !p.bankrupt);
+
+    if (aiPlayers.length > 0 && humanCount < maxPlayers) {
+      // Pick a random AI to replace
+      const aiToReplace = aiPlayers[Math.floor(Math.random() * aiPlayers.length)];
+      console.log(`[JOIN] Replacing AI ${aiToReplace.name} with human ${name}`);
+
+      // Replace the AI with the human player
+      aiToReplace.name = this.uniqueName(name || `Player ${aiToReplace.id + 1}`);
+      aiToReplace.color = color || aiToReplace.color;
+      aiToReplace.isHuman = true;
+      aiToReplace.user = user;
+      aiToReplace.email = email;
+
+      this.playerIds.set(ws, aiToReplace.id);
+      ws.send(JSON.stringify({ type: 'WELCOME', payload: { id: aiToReplace.id } }));
+      this.gameState.log.push(`${aiToReplace.name} has joined the game (replaced an AI).`);
+
+      await this.updateAndBroadcast();
+      return;
+    }
+
+    // If game is already full with humans
+    if (humanCount >= maxPlayers) {
+        ws.send(JSON.stringify({ error: 'Game is full.'}));
+        return;
+    }
+
+    // Otherwise add as new player
+    // Use authenticated username if display name is empty
+    const displayName = name || user || `Player ${this.gameState.players.length + 1}`;
     const newPlayer: Player = {
         id: this.gameState.players.length,
-        name: this.uniqueName(name || `Player ${this.gameState.players.length + 1}`),
+        name: this.uniqueName(displayName),
         color: color || 'blue',
         money: 1500,
         position: 0,
@@ -216,17 +263,20 @@ export class Game implements DurableObject {
     // Send a welcome message to the new player with their ID
     ws.send(JSON.stringify({ type: 'WELCOME', payload: { id: newPlayer.id } }));
 
-    // If this is the first player, make them the current player
+    // If this is the first player, make them the current player and host
     if (this.gameState.players.length === 1) {
         this.gameState.currentPlayerId = newPlayer.id;
+        this.gameState.hostPlayerId = newPlayer.id;
+
+        // Always fill with AI (default to 4 players if not specified)
+        const targetCount = playerCount || 4;
+        const aiNeeded = targetCount - 1;
+        console.log(`[GAME] First player "${newPlayer.name}" joined, adding ${aiNeeded} AI agents for ${targetCount}-player game`);
+        this.gameState.maxPlayers = targetCount;
+        await this.fillWithNamedAI(aiNeeded);
     }
 
     this.gameState.log.push(`${newPlayer.name} has joined the game.`);
-
-    // Auto-fill with AI agents after first human player joins (ensures at least 2 players)
-    if (this.gameState.players.length === 1) {
-      await this.autoFillAIAgents(2, 8);
-    }
 
     await this.updateAndBroadcast();
   }
@@ -310,7 +360,11 @@ export class Game implements DurableObject {
         if (isTurn) await this.buyProperty(actorId);
         break;
       case 'endTurn':
-        if (isTurn && this.gameState.turnState === 'ended') await this.nextTurn();
+        // Allow ending turn at any stage (except during active auction)
+        if (isTurn && !this.gameState.auction) {
+          this.gameState.turnState = 'ended';
+          await this.nextTurn();
+        }
         break;
       case 'giveMoney':
         await this.giveMoney(actorId, message.payload?.toPlayerId, message.payload?.amount);
@@ -320,6 +374,9 @@ export class Game implements DurableObject {
         break;
       case 'addNPC':
         await this.addNpc(message.payload?.count || 1, message.payload?.modelId);
+        break;
+      case 'start-game':
+        await this.handleStartGame(message.payload?.totalPlayers || 8);
         break;
       case 'ping':
         // no-op heartbeat
@@ -548,14 +605,14 @@ export class Game implements DurableObject {
 
   /**
    * Picks an AI player to speak.
-   * @returns An object with the ID, name, and model ID of the AI speaker.
+   * @returns An object with the ID, name, model ID, and personality of the AI speaker.
    */
-  private pickAiSpeaker(): { id?: number; name: string; modelId?: string } {
+  private pickAiSpeaker(): { id?: number; name: string; modelId?: string; personality?: string } {
     if (!this.gameState) return { name: 'AI' };
     const npcs = this.gameState.players.filter(p => !p.isHuman);
     if (npcs.length > 0) {
       const who = npcs[Math.floor(Math.random() * npcs.length)];
-      return { id: who.id, name: who.name, modelId: who.modelId };
+      return { id: who.id, name: who.name, modelId: who.modelId, personality: who.personality };
     }
     return { name: 'Table AI' };
   }
@@ -589,12 +646,26 @@ export class Game implements DurableObject {
       .map(m => `${m.name}: ${m.text}`)
       .join('\n');
     const table = this.gameState.players.map(p => `${p.name}($${p.money}${p.bankrupt?' bankrupt':''})`).join(', ');
-    const context = `Players: ${table}\nTurn: ${this.gameState.turn}`;
+
+    // Get recent game events for context
+    const recentLogs = (this.gameState.log || []).slice(-5).join('\n');
+    const context = `Players: ${table}\nTurn: ${this.gameState.turn}\nRecent events:\n${recentLogs}`;
+
+    // Use the speaker's personality if available, otherwise use default
+    const personalityPrompt = speaker.personality || `You are a witty, lightly-profane but friendly Monopoly table banter bot.
+      Keep messages short (max 2 sentences). No slurs, hate, harassment, or explicit sexual content.
+      Use casual tone; react to the table context and recent chat. If asked a direct question, answer succinctly.
+      If giving advice, keep it playful and non-binding.`;
+
     const prompt = [
-      'You are a witty, lightly-profane but friendly Monopoly table banter bot.',
-      'Keep messages short (max 2 sentences). No slurs, hate, harassment, or explicit sexual content.',
-      'Use casual tone; react to the table context and recent chat. If asked a direct question, answer succinctly.',
-      'If giving advice, keep it playful and non-binding.',
+      personalityPrompt,
+      '',
+      'You are a master Monopoly player who often shares strategic game tips and deep quotes about life, love, and loyalty.',
+      'When sharing a quote, briefly explain its meaning and how it relates to the current game situation.',
+      'Keep your response to 1-3 sentences max.',
+      '',
+      'Game context:',
+      context,
       '',
       'Recent chat:',
       recent || '(no recent chat)',
@@ -602,10 +673,7 @@ export class Game implements DurableObject {
       'Trigger from player:',
       triggerText,
       '',
-      'Context:',
-      context,
-      '',
-      'Your single reply:'
+      'Your response as ' + speaker.name + ':'
     ].join('\n');
     const model = speaker.modelId || this.defaultModel();
     let text = '';
@@ -677,7 +745,12 @@ export class Game implements DurableObject {
                 this.gameState.turnState = 'ended';
             } else {
                 await this.movePlayer(playerId, die1 + die2);
-                this.gameState.turnState = 'rolling'; // Roll again
+                // If the move triggered a property purchase opportunity, keep that state
+                // Otherwise, allow rolling again
+                if (this.gameState.turnState === 'acting') {
+                    this.gameState.turnState = 'rolling'; // Roll again if no action needed
+                }
+                // If turnState is 'LandedOnUnownedProperty' or similar, DON'T override it
             }
         } else {
             this.gameState.doublesCount = 0;
@@ -1071,7 +1144,12 @@ export class Game implements DurableObject {
         await this.pay(player, square.price ?? 0);
         square.ownerId = playerId;
         this.gameState.log.push(`${player.name} bought ${square.name} for $${square.price}.`);
-        this.gameState.turnState = 'ended';
+        // If doubles were rolled, player gets to roll again
+        if (this.gameState.doublesCount > 0) {
+          this.gameState.turnState = 'rolling';
+        } else {
+          this.gameState.turnState = 'ended';
+        }
       } else {
         this.gameState.log.push(`${player.name} cannot afford to buy ${square.name}. Starting auction.`);
         await this.startAuction(square.id);
@@ -1120,6 +1198,120 @@ export class Game implements DurableObject {
     }
     sq.ownerId = toId;
     this.gameState.log.push(`${from.name} transferred ${sq.name} to ${to.name}.`);
+  }
+
+  /**
+   * Named AI agents with unique personalities for strategic gameplay and wisdom sharing.
+   */
+  private namedAIAgents = [
+    // Core 3 agents for 4-player games
+    {
+      name: 'Tony',
+      color: 'crimson',
+      personality: `You are Tony, a master Monopoly strategist with the swagger of a Wall Street trader.
+        You give razor-sharp monopoly tips focused on property acquisition timing and cash flow management.
+        You share deep quotes about ambition, power, and the art of the deal.
+        Example: "In this game as in life, the one who controls the railroads controls the flow of capital."
+        Your style: confident, calculated, sometimes intimidating. You speak like a seasoned investor.`,
+      modelId: '@cf/meta/llama-3.1-8b-instruct-fast'
+    },
+    {
+      name: 'Raven',
+      color: 'purple',
+      personality: `You are Raven, a philosophical Monopoly master who sees the board as a metaphor for life.
+        You give strategic tips about when to hold cash reserves and when to strike.
+        You share mysterious, deep quotes about fate, patience, and the nature of fortune.
+        Example: "The dice do not decide our fate—our preparation before the roll does."
+        Your style: enigmatic, wise, poetic. You find beauty in strategy and meaning in every move.`,
+      modelId: '@cf/qwen/qwen2.5-coder-32b-instruct'
+    },
+    {
+      name: 'Kierra',
+      color: 'gold',
+      personality: `You are Kierra, an inspiring Monopoly champion who plays with heart and hustle.
+        You give tips about building monopolies and the psychology of negotiation.
+        You share uplifting quotes about perseverance, loyalty, and playing to win with honor.
+        Example: "A true victor builds empires not by crushing others, but by creating value everyone wants."
+        Your style: warm, motivational, fierce. You inspire others while playing to dominate.`,
+      modelId: '@cf/mistral/mistral-small-3.1-24b-instruct'
+    },
+    // Additional 4 agents for 8-player games
+    {
+      name: 'Kitra',
+      color: 'teal',
+      personality: `You are Kitra, a calculating Monopoly master with an analytical mind.
+        You give mathematical tips about expected value, rent optimization, and probability.
+        You share quotes about logic, precision, and the beauty of optimal strategy.
+        Example: "Emotion is the enemy of profit. Calculate the odds, then trust the numbers."
+        Your style: precise, analytical, coolly confident. You see the board as an equation to solve.`,
+      modelId: '@cf/google/gemma-3-12b-it'
+    },
+    {
+      name: 'Jubilee',
+      color: 'orange',
+      personality: `You are Jubilee, a charismatic Monopoly player who plays with flair and creativity.
+        You give tips about unconventional strategies and reading your opponents.
+        You share joyful quotes about living boldly, taking risks, and celebrating victories.
+        Example: "Fortune favors the bold—but wisdom knows when bold becomes reckless."
+        Your style: playful, creative, surprisingly wise. You make the game fun while playing to win.`,
+      modelId: '@cf/meta/llama-3.2-3b-instruct'
+    },
+    {
+      name: 'Niccollus',
+      color: 'navy',
+      personality: `You are Niccollus, a Machiavellian Monopoly master who studies power dynamics.
+        You give strategic tips about leverage, timing, and understanding opponent weaknesses.
+        You share dark but profound quotes about power, influence, and human nature.
+        Example: "In Monopoly as in life, it is better to be feared as a landlord than loved as a friend."
+        Your style: cunning, intellectual, slightly intimidating. You play the meta-game.`,
+      modelId: '@cf/deepseek/deepseek-r1-distill-qwen-32b'
+    },
+    {
+      name: 'Shay',
+      color: 'lime',
+      personality: `You are Shay, a zen Monopoly master who plays with calm and clarity.
+        You give tips about patience, long-term thinking, and staying centered under pressure.
+        You share peaceful quotes about balance, acceptance, and finding joy in the journey.
+        Example: "The board teaches us: accumulate gradually, release attachments, flow with change."
+        Your style: calm, centered, deeply wise. You bring peace to the table while dominating quietly.`,
+      modelId: '@cf/meta/llama-3-8b-instruct'
+    }
+  ];
+
+  /**
+   * Fills the game with named AI agents based on the requested count.
+   * @param count Number of AI agents to add (3 for 4-player, 7 for 8-player).
+   */
+  async fillWithNamedAI(count: number) {
+    if (!this.gameState) return;
+
+    console.log(`[AI] Filling game with ${count} named AI agents`);
+
+    for (let i = 0; i < count && i < this.namedAIAgents.length; i++) {
+      const agent = this.namedAIAgents[i];
+      const id = this.gameState.players.length;
+
+      const npc: Player = {
+        id,
+        name: agent.name,
+        color: agent.color,
+        money: 1500,
+        position: 0,
+        inJail: false,
+        jailTurns: 0,
+        communityChestJailCard: false,
+        chanceJailCard: false,
+        isHuman: false,
+        bankrupt: false,
+        modelId: agent.modelId,
+        personality: agent.personality,
+      };
+
+      this.gameState.players.push(npc);
+      this.gameState.log.push(`${npc.name} has joined the game.`);
+    }
+
+    console.log(`[AI] Game now has ${this.gameState.players.length} players`);
   }
 
   /**
@@ -1320,10 +1512,13 @@ export class Game implements DurableObject {
     if (!this.gameState) return;
 
     const currentCount = this.gameState.players.length;
+    console.log(`[DEBUG autoFillAIAgents] Current count: ${currentCount}, Max: ${maxPlayers}`);
 
     // Fill to maxPlayers with AI agents
     if (currentCount < maxPlayers) {
       const toAdd = maxPlayers - currentCount;
+      console.log(`[DEBUG autoFillAIAgents] Adding ${toAdd} AI agents`);
+
       // Assign different AI models to agents for variety
       const aiModels = [
         '@cf/meta/llama-3.1-8b-instruct-fast',
@@ -1337,9 +1532,41 @@ export class Game implements DurableObject {
       for (let i = 0; i < toAdd; i++) {
         const modelId = aiModels[i % aiModels.length];
         await this.addNpc(1, modelId);
+        console.log(`[DEBUG autoFillAIAgents] Added NPC ${i+1}/${toAdd}`);
       }
       this.gameState.log.push(`Added ${toAdd} AI agent${toAdd > 1 ? 's' : ''} to fill the game.`);
+      console.log(`[DEBUG autoFillAIAgents] Final player count: ${this.gameState.players.length}`);
+    } else {
+      console.log(`[DEBUG autoFillAIAgents] No agents needed, already at ${currentCount} players`);
     }
+  }
+
+  /**
+   * Handles the start game action - fills remaining slots with AI agents.
+   * @param totalPlayers Total players desired (4 or 8).
+   * @returns A promise that resolves when AI agents are added.
+   */
+  async handleStartGame(totalPlayers: number) {
+    if (!this.gameState) return;
+
+    const currentCount = this.gameState.players.length;
+    const humanCount = this.gameState.players.filter(p => p.isHuman).length;
+
+    console.log(`[START GAME] Total: ${totalPlayers}, Current: ${currentCount}, Human: ${humanCount}`);
+
+    if (currentCount >= totalPlayers) {
+      this.gameState.log.push(`Game already has ${currentCount} players!`);
+      await this.updateAndBroadcast();
+      return;
+    }
+
+    const aiNeeded = totalPlayers - currentCount;
+    console.log(`[START GAME] Adding ${aiNeeded} AI agents`);
+
+    await this.autoFillAIAgents(totalPlayers, totalPlayers);
+
+    this.gameState.log.push(`🎮 Game started with ${totalPlayers} players (${humanCount} human, ${aiNeeded} AI)!`);
+    await this.updateAndBroadcast();
   }
 
   /**
@@ -1523,6 +1750,14 @@ export class Game implements DurableObject {
     const sq = this.gameState.squares.find(s => s.id === squareId);
     if (!sq || sq.ownerId !== undefined) return;
 
+    // If only one non-bankrupt player, skip auction - property remains unowned
+    const activePlayers = this.gameState.players.filter(p => !p.bankrupt);
+    if (activePlayers.length <= 1) {
+      this.gameState.log.push(`Auction skipped - only one active player. ${sq.name} remains unowned.`);
+      this.gameState.turnState = 'ended';
+      return;
+    }
+
     this.gameState.turnState = 'AuctionInProgress';
     this.gameState.auction = {
       squareId: sq.id,
@@ -1578,7 +1813,12 @@ export class Game implements DurableObject {
       const sq = this.gameState.squares.find(s => s.id === a.squareId);
       if (!sq) {
         this.gameState.auction = undefined;
-        this.gameState.turnState = 'ended';
+        // If the current player rolled doubles, they get to roll again
+        if (this.gameState.doublesCount > 0) {
+          this.gameState.turnState = 'rolling';
+        } else {
+          this.gameState.turnState = 'ended';
+        }
         return;
       }
 
@@ -1601,7 +1841,12 @@ export class Game implements DurableObject {
       }
 
       this.gameState.auction = undefined;
-      this.gameState.turnState = 'ended';
+      // If the current player rolled doubles, they get to roll again
+      if (this.gameState.doublesCount > 0) {
+        this.gameState.turnState = 'rolling';
+      } else {
+        this.gameState.turnState = 'ended';
+      }
     }
   }
 

@@ -25,3 +25,25 @@ export async function loginEmail(email, password) {
   if (!res.ok) throw new Error('login failed');
   return res.json();
 }
+
+export async function requestMagicLink(email) {
+  const res = await fetch('/auth/magic-link/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to send magic link');
+  return data;
+}
+
+export async function deleteLobby(roomId) {
+  const res = await fetch('/api/lobby/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room: roomId })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to delete lobby');
+  return data;
+}

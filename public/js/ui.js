@@ -8,6 +8,8 @@ export function showGame() {
   const moneyBarDiv = document.getElementById('moneybar');
   const leftSidebar = document.getElementById('left-sidebar');
   const gamestats = document.getElementById('gamestats');
+  const eventlog = document.getElementById('eventlog');
+  const chatPanel = document.getElementById('chat');
   if (setupDiv) setupDiv.style.display = 'none';
   if (boardDiv) boardDiv.style.display = 'block';
   if (boardWrap) boardWrap.style.display = 'flex';
@@ -15,6 +17,8 @@ export function showGame() {
   if (moneyBarDiv) moneyBarDiv.style.display = 'block';
   if (leftSidebar) leftSidebar.style.display = 'block';
   if (gamestats) gamestats.style.display = 'block';
+  if (eventlog) eventlog.style.display = 'block';
+  if (chatPanel) chatPanel.style.display = 'block';
 }
 
 export function hideGame() {
@@ -25,7 +29,9 @@ export function hideGame() {
   const moneyBarDiv = document.getElementById('moneybar');
   const leftSidebar = document.getElementById('left-sidebar');
   const gamestats = document.getElementById('gamestats');
+  const eventlog = document.getElementById('eventlog');
   const videoPanel = document.getElementById('video-panel');
+  const chatPanel = document.getElementById('chat');
   if (setupDiv) setupDiv.style.display = 'block';
   if (boardDiv) boardDiv.style.display = 'none';
   if (boardWrap) boardWrap.style.display = 'none';
@@ -33,7 +39,9 @@ export function hideGame() {
   if (moneyBarDiv) moneyBarDiv.style.display = 'none';
   if (leftSidebar) leftSidebar.style.display = 'none';
   if (gamestats) gamestats.style.display = 'none';
+  if (eventlog) eventlog.style.display = 'none';
   if (videoPanel) videoPanel.style.display = 'none';
+  if (chatPanel) chatPanel.style.display = 'none';
 }
 
 export function updateGameStats(gameState) {

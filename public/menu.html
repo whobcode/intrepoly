@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>whoBmonopoly - Game Menu</title>
+  <style>
+    :root {
+      --bg: #0e0e0e;
+      --bg-soft: #151515;
+      --text: #e6c36a;
+      --muted: #b08f3b;
+      --accent: #c32222;
+      --border: #d9b24a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      min-height: 100vh;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      background: linear-gradient(135deg, #c32222, #8a1818);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .topbar h1 {
+      font-size: 24px;
+      color: white;
+    }
+
+    .topbar .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: white;
+    }
+
+    .topbar button {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .topbar button:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .menu-card {
+      background: var(--bg-soft);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    .menu-card h2 {
+      font-size: 32px;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .menu-card .subtitle {
+      color: var(--muted);
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .menu-options {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .menu-btn {
+      background: linear-gradient(135deg, var(--accent), #8a1818);
+      border: none;
+      color: white;
+      padding: 18px 32px;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .menu-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(195, 34, 34, 0.4);
+    }
+
+    .menu-btn.secondary {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      color: var(--text);
+    }
+
+    .menu-btn.secondary:hover {
+      background: rgba(217, 178, 74, 0.1);
+    }
+
+    .stats-box {
+      margin-top: 30px;
+      padding: 20px;
+      background: var(--bg);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .stats-box h3 {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* Player Count Selection Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-soft);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 450px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .modal h3 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .modal p {
+      color: var(--muted);
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .player-count-options {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .count-btn {
+      flex: 1;
+      max-width: 150px;
+      padding: 30px 20px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .count-btn:hover {
+      border-color: var(--accent);
+      background: rgba(195, 34, 34, 0.1);
+    }
+
+    .count-btn .num {
+      font-size: 48px;
+      font-weight: bold;
+      color: var(--text);
+      display: block;
+    }
+
+    .count-btn .label {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .count-btn .ai-info {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .modal-cancel {
+      background: transparent;
+      border: 1px solid var(--muted);
+      color: var(--muted);
+      padding: 10px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .modal-cancel:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    /* Join Game Section */
+    .join-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .join-section input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .join-section input::placeholder {
+      color: var(--muted);
+    }
+
+    /* Username Setup Section */
+    .username-section {
+      margin-bottom: 24px;
+      padding: 20px;
+      background: var(--bg);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .username-section label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .username-section input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-soft);
+      color: var(--text);
+      font-size: 18px;
+      text-align: center;
+    }
+
+    .username-section select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-soft);
+      color: var(--text);
+      font-size: 14px;
+      margin-top: 12px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 600px) {
+      .menu-card { padding: 24px; }
+      .menu-card h2 { font-size: 24px; }
+      .player-count-options { flex-direction: column; }
+      .count-btn { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>whoBmonopoly</h1>
+    <div class="user-info">
+      <span id="username-display">Loading...</span>
+      <button id="logout-btn">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="menu-card">
+      <h2>Game Menu</h2>
+      <p class="subtitle">Ready to dominate the board?</p>
+
+      <!-- Username Setup -->
+      <div class="username-section">
+        <label for="player-name">Your Display Name</label>
+        <input type="text" id="player-name" maxlength="16" placeholder="Enter your name">
+        <select id="player-color" title="Choose your token color">
+          <option value="Yellow" style="color: yellow;">Yellow</option>
+          <option value="Red" style="color: red;">Red</option>
+          <option value="Blue" style="color: blue;">Blue</option>
+          <option value="Green" style="color: green;">Green</option>
+          <option value="Orange" style="color: orange;">Orange</option>
+          <option value="Purple" style="color: purple;">Purple</option>
+          <option value="Aqua" style="color: aqua;">Aqua</option>
+          <option value="Fuchsia" style="color: fuchsia;">Fuchsia</option>
+        </select>
+      </div>
+
+      <div class="menu-options">
+        <button class="menu-btn" id="start-game-btn">
+          <span>Start New Game</span>
+        </button>
+
+        <button class="menu-btn secondary" id="join-lobby-btn">
+          <span>Browse Lobbies</span>
+        </button>
+      </div>
+
+      <!-- Join with Code -->
+      <div class="join-section">
+        <input type="text" id="game-code" placeholder="Enter Game Code (e.g., swift-dragon-42)">
+        <button class="menu-btn secondary" id="join-code-btn" style="width: 100%;">
+          Join Game
+        </button>
+      </div>
+
+      <!-- Player Stats -->
+      <div class="stats-box">
+        <h3>Your Stats</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="stat-wins">0</div>
+            <div class="stat-label">Wins</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-losses">0</div>
+            <div class="stat-label">Losses</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-credits">0</div>
+            <div class="stat-label">Credits</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Player Count Selection Modal -->
+  <div class="modal-overlay" id="player-count-modal">
+    <div class="modal">
+      <h3>Choose Game Size</h3>
+      <p>How many players should be at the table?</p>
+
+      <div class="player-count-options">
+        <button class="count-btn" data-count="4">
+          <span class="num">4</span>
+          <span class="label">Players</span>
+          <span class="ai-info">3 AI: Tony, Raven, Kierra</span>
+        </button>
+        <button class="count-btn" data-count="8">
+          <span class="num">8</span>
+          <span class="label">Players</span>
+          <span class="ai-info">7 AI: All characters</span>
+        </button>
+      </div>
+
+      <button class="modal-cancel" id="cancel-modal">Cancel</button>
+    </div>
+  </div>
+
+  <script type="module">
+    // Check authentication
+    async function checkAuth() {
+      try {
+        const res = await fetch('/auth/whoami');
+        const data = await res.json();
+
+        if (!data.user) {
+          // Not logged in, redirect to main page
+          window.location.href = '/';
+          return null;
+        }
+
+        return data;
+      } catch (e) {
+        window.location.href = '/';
+        return null;
+      }
+    }
+
+    // Initialize page
+    async function init() {
+      const authData = await checkAuth();
+      if (!authData) return;
+
+      // Update UI with user info
+      document.getElementById('username-display').textContent = `Welcome, ${authData.user}`;
+      document.getElementById('player-name').value = authData.user;
+
+      // Update stats if available
+      if (authData.stats) {
+        document.getElementById('stat-wins').textContent = authData.stats.wins || 0;
+        document.getElementById('stat-losses').textContent = authData.stats.losses || 0;
+        document.getElementById('stat-credits').textContent = authData.stats.credits || 0;
+      }
+    }
+
+    // Logout
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+
+    // Start Game - Show player count modal
+    document.getElementById('start-game-btn').addEventListener('click', () => {
+      document.getElementById('player-count-modal').classList.add('active');
+    });
+
+    // Cancel modal
+    document.getElementById('cancel-modal').addEventListener('click', () => {
+      document.getElementById('player-count-modal').classList.remove('active');
+    });
+
+    // Player count selection
+    document.querySelectorAll('.count-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const count = btn.dataset.count;
+        const playerName = document.getElementById('player-name').value.trim() || 'Player';
+        const playerColor = document.getElementById('player-color').value;
+
+        // Create a new lobby
+        try {
+          const res = await fetch('/api/lobby/create', { method: 'POST' });
+          const data = await res.json();
+
+          if (data.id) {
+            // Store player preferences
+            sessionStorage.setItem('playerName', playerName);
+            sessionStorage.setItem('playerColor', playerColor);
+            sessionStorage.setItem('playerCount', count);
+            sessionStorage.setItem('isHost', 'true');
+
+            // Redirect to game with the lobby ID
+            window.location.href = `/#${data.id}`;
+          }
+        } catch (e) {
+          console.error('Failed to create lobby:', e);
+          alert('Failed to create game. Please try again.');
+        }
+      });
+    });
+
+    // Browse lobbies
+    document.getElementById('join-lobby-btn').addEventListener('click', () => {
+      window.location.href = '/lobby.html';
+    });
+
+    // Join with code
+    document.getElementById('join-code-btn').addEventListener('click', () => {
+      const code = document.getElementById('game-code').value.trim();
+      if (code) {
+        const playerName = document.getElementById('player-name').value.trim() || 'Player';
+        const playerColor = document.getElementById('player-color').value;
+
+        sessionStorage.setItem('playerName', playerName);
+        sessionStorage.setItem('playerColor', playerColor);
+        sessionStorage.setItem('isHost', 'false');
+
+        window.location.href = `/#${code}`;
+      }
+    });
+
+    // Allow Enter key to join with code
+    document.getElementById('game-code').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('join-code-btn').click();
+      }
+    });
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>

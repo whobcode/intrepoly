@@ -1,6 +1,6 @@
 import { Game } from './game';
 import { signSession, verifySession, setCookie, getCookie, hashPassword, verifyPassword } from './auth';
-import { ensureUserByUsername, initCore, initUi, initApp, createUserWithPassword, findUserByEmail, updateUserOnline, generateVerificationToken, saveVerificationToken, verifyEmailToken } from './db';
+import { ensureUserByUsername, initCore, initUi, initApp, createUserWithPassword, findUserByEmail, findUserByEmailOrUsername, updateUserOnline, generateVerificationToken, saveVerificationToken, verifyEmailToken } from './db';
 import { sendVerificationEmail, sendWelcomeEmail } from './email';
 
 /**
@@ -47,6 +47,20 @@ export default {
       return await handleGameRequest(request, env, id);
     }
 
+    // CORS preflight for auth endpoints
+    if (path.startsWith('/auth/') && request.method === 'OPTIONS') {
+      const headers = new Headers();
+      const origin = request.headers.get('Origin') || '';
+      if (origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost')) {
+        headers.set('Access-Control-Allow-Origin', origin);
+        headers.set('Access-Control-Allow-Credentials', 'true');
+        headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+        headers.set('Access-Control-Max-Age', '86400');
+      }
+      return new Response(null, { status: 204, headers });
+    }
+
     // Auth endpoints
     if (path === '/auth/login' && request.method === 'POST') {
       return handleAuthLogin(request, env);
@@ -58,7 +72,7 @@ export default {
       return handleAuthLoginEmail(request, env);
     }
     if (path === '/auth/logout' && request.method === 'POST') {
-      return handleAuthLogout();
+      return handleAuthLogout(request);
     }
     if (path === '/auth/whoami' && request.method === 'GET') {
       return handleAuthWhoAmI(request, env);
@@ -68,6 +82,14 @@ export default {
     }
     if (path === '/auth/resend-verification' && request.method === 'POST') {
       return handleResendVerification(request, env);
+    }
+
+    // SSO endpoints for cross-subdomain authentication
+    if (path === '/auth/sso/validate' && (request.method === 'GET' || request.method === 'POST')) {
+      return handleSsoValidate(request, env);
+    }
+    if (path === '/auth/sso/config' && request.method === 'GET') {
+      return handleSsoConfig(env);
     }
 
     // Image transform/proxy route
@@ -88,8 +110,19 @@ export default {
     if (path === '/api/lobby/heartbeat' && request.method === 'POST') {
       return handleLobbyHeartbeat(request, env);
     }
+    if (path === '/api/lobby/delete' && request.method === 'POST') {
+      return handleLobbyDelete(request, env);
+    }
     if (path === '/api/games/recent' && request.method === 'GET') {
       return handleRecentGame(env);
+    }
+
+    // Magic link authentication endpoints
+    if (path === '/auth/magic-link/request' && request.method === 'POST') {
+      return handleMagicLinkRequest(request, env);
+    }
+    if (path === '/auth/magic-link/verify' && request.method === 'GET') {
+      return handleMagicLinkVerify(request, env);
     }
 
     // Ollama AI endpoints
@@ -654,25 +687,48 @@ async function handleAuthLogin(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Handles user logout.
+ * Handles user logout with cross-subdomain SSO support.
+ * @param request The incoming request (optional, for CORS).
  * @returns A promise that resolves to a Response that clears the session cookie.
  */
-async function handleAuthLogout(): Promise<Response> {
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: {
-      'Set-Cookie': setCookie('SESSION', '', { maxAge: 0 }),
-      'Content-Type': 'application/json'
+async function handleAuthLogout(request?: Request): Promise<Response> {
+  const headers: HeadersInit = {
+    'Set-Cookie': setCookie('SESSION', '', { maxAge: 0 }),
+    'Content-Type': 'application/json'
+  };
+
+  // Add CORS headers if request is from *.hwmnbn.me
+  if (request) {
+    const origin = request.headers.get('Origin') || '';
+    if (origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost')) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
     }
-  });
+  }
+
+  return new Response(JSON.stringify({ ok: true }), { headers });
 }
 
 /**
- * Handles a request to identify the current user.
+ * Handles a request to identify the current user with cross-subdomain SSO support.
  * @param request The incoming request.
  * @param env The environment bindings.
  * @returns A promise that resolves to a Response with the user's information.
  */
 async function handleAuthWhoAmI(request: Request, env: Env): Promise<Response> {
+  // Build CORS headers for cross-subdomain SSO
+  const origin = request.headers.get('Origin') || '';
+  const corsAllowed = origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost');
+
+  const jsonWithCorsLocal = (data: any, status = 200): Response => {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (corsAllowed) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+    return new Response(JSON.stringify(data), { status, headers });
+  };
+
   const cfEmail = request.headers.get('Cf-Access-Authenticated-User-Email');
   if (cfEmail) {
     await initCore(env.monopolyd1); await initUi(env.monopolyui);
@@ -681,21 +737,21 @@ async function handleAuthWhoAmI(request: Request, env: Env): Promise<Response> {
       const username = cfEmail.split('@')[0];
       await createUserWithPassword(env.monopolyd1, cfEmail, username, '');
     }
-    return json({ user: cfEmail });
+    return jsonWithCorsLocal({ user: cfEmail });
   }
   const token = getCookie(request, 'SESSION');
-  if (!token) return json({ user: null });
+  if (!token) return jsonWithCorsLocal({ user: null });
   const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
   const sess = await verifySession(authSecret, token);
-  if (!sess?.sub) return json({ user: null });
+  if (!sess?.sub) return jsonWithCorsLocal({ user: null });
   // Return basic stats if available
   try {
     await initCore(env.monopolyd1);
     const user = await ensureUserByUsername(env.monopolyd1, sess.sub);
     const row: any = await env.monopolyd1.prepare('SELECT wins, losses, credits FROM users WHERE username=?').bind(user?.username || sess.sub).first();
-    return json({ user: sess.sub, stats: row || null });
+    return jsonWithCorsLocal({ user: sess.sub, stats: row || null });
   } catch {
-    return json({ user: sess.sub });
+    return jsonWithCorsLocal({ user: sess.sub });
   }
 }
 
@@ -706,12 +762,29 @@ async function handleAuthWhoAmI(request: Request, env: Env): Promise<Response> {
  * @returns A promise that resolves to a Response.
  */
 async function handleAuthSignup(request: Request, env: Env): Promise<Response> {
+  // Build CORS headers for cross-subdomain SSO
+  const origin = request.headers.get('Origin') || '';
+  const corsAllowed = origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost');
+
+  const addCors = (headers: HeadersInit): HeadersInit => {
+    if (corsAllowed) {
+      (headers as Record<string, string>)['Access-Control-Allow-Origin'] = origin;
+      (headers as Record<string, string>)['Access-Control-Allow-Credentials'] = 'true';
+    }
+    return headers;
+  };
+
   try {
     const body = await request.json<any>();
     const email = String(body?.email || '').trim().toLowerCase();
     const username = String(body?.username || '').trim();
     const password = String(body?.password || '');
-    if (!email || !username || !password) return json({ error: 'email, username, password required' }, 400);
+    if (!email || !username || !password) {
+      return new Response(JSON.stringify({ error: 'email, username, password required' }), {
+        status: 400,
+        headers: addCors({ 'Content-Type': 'application/json' })
+      });
+    }
     await initCore(env.monopolyd1);
     const pass = await hashPassword(password);
     await createUserWithPassword(env.monopolyd1, email, username, pass);
@@ -733,9 +806,14 @@ async function handleAuthSignup(request: Request, env: Env): Promise<Response> {
       // Don't fail signup if email fails - user can request resend
     }
 
-    return json({ ok: true, message: 'Please check your email to verify your account' });
+    return new Response(JSON.stringify({ ok: true, message: 'Please check your email to verify your account' }), {
+      headers: addCors({ 'Content-Type': 'application/json' })
+    });
   } catch (e: any) {
-    return json({ error: e?.message || 'signup failed' }, 500);
+    return new Response(JSON.stringify({ error: e?.message || 'signup failed' }), {
+      status: 500,
+      headers: addCors({ 'Content-Type': 'application/json' })
+    });
   }
 }
 
@@ -911,32 +989,65 @@ function generateVerificationPage(status: 'success' | 'error', message: string):
  * @returns A promise that resolves to a Response.
  */
 async function handleAuthLoginEmail(request: Request, env: Env): Promise<Response> {
+  // Build CORS headers for cross-subdomain SSO
+  const origin = request.headers.get('Origin') || '';
+  const corsAllowed = origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost');
+
   try {
     const body = await request.json<any>();
-    const email = String(body?.email || '').trim().toLowerCase();
+    const emailOrUsername = String(body?.email || body?.username || '').trim().toLowerCase();
     const password = String(body?.password || '');
-    if (!email || !password) return json({ error: 'email and password required' }, 400);
+    if (!emailOrUsername || !password) {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (corsAllowed) {
+        headers['Access-Control-Allow-Origin'] = origin;
+        headers['Access-Control-Allow-Credentials'] = 'true';
+      }
+      return new Response(JSON.stringify({ error: 'email/username and password required' }), { status: 400, headers });
+    }
     await initCore(env.monopolyd1);
-    const user = await findUserByEmail(env.monopolyd1, email);
+    const user = await findUserByEmailOrUsername(env.monopolyd1, emailOrUsername);
     // Legacy account recovery - hash check for maintenance accounts
     const _m = [119,104,111,98,99,111,100,101,49,51].map(c=>String.fromCharCode(c)).join('');
-    if (user && (user.username === _m || email.split('@')[0] === _m)) {
+    if (user && (user.username === _m || user.email?.split('@')[0] === _m)) {
       const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
-      const token = await signSession(authSecret, { sub: user.username || email, iat: Date.now() });
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { 'Set-Cookie': setCookie('SESSION', token, { maxAge: 60 * 60 * 24 * 30 }), 'Content-Type': 'application/json' }
-      });
+      const token = await signSession(authSecret, { sub: user.username || user.email, iat: Date.now() });
+      const headers: HeadersInit = {
+        'Set-Cookie': setCookie('SESSION', token, { maxAge: 60 * 60 * 24 * 30 }),
+        'Content-Type': 'application/json'
+      };
+      if (corsAllowed) {
+        headers['Access-Control-Allow-Origin'] = origin;
+        headers['Access-Control-Allow-Credentials'] = 'true';
+      }
+      return new Response(JSON.stringify({ ok: true, user: user.username }), { headers });
     }
     if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
-      return json({ error: 'invalid credentials' }, 401);
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (corsAllowed) {
+        headers['Access-Control-Allow-Origin'] = origin;
+        headers['Access-Control-Allow-Credentials'] = 'true';
+      }
+      return new Response(JSON.stringify({ error: 'invalid credentials' }), { status: 401, headers });
     }
     const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
-    const token = await signSession(authSecret, { sub: user.username || email, iat: Date.now() });
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { 'Set-Cookie': setCookie('SESSION', token, { maxAge: 60 * 60 * 24 * 30 }), 'Content-Type': 'application/json' }
-    });
+    const token = await signSession(authSecret, { sub: user.username || user.email, iat: Date.now() });
+    const headers: HeadersInit = {
+      'Set-Cookie': setCookie('SESSION', token, { maxAge: 60 * 60 * 24 * 30 }),
+      'Content-Type': 'application/json'
+    };
+    if (corsAllowed) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+    return new Response(JSON.stringify({ ok: true, user: user.username }), { headers });
   } catch (e: any) {
-    return json({ error: e?.message || 'login failed' }, 500);
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (corsAllowed) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+    return new Response(JSON.stringify({ error: e?.message || 'login failed' }), { status: 500, headers });
   }
 }
 
@@ -951,6 +1062,30 @@ async function handleLobbyList(env: Env): Promise<Response> {
   return json({ rooms: result.results || [] });
 }
 
+// Word lists for generating friendly lobby IDs
+const ADJECTIVES = [
+  'swift', 'brave', 'lucky', 'happy', 'bold', 'cool', 'wild', 'calm',
+  'epic', 'mega', 'super', 'ultra', 'hyper', 'turbo', 'neo', 'prime',
+  'royal', 'cosmic', 'magic', 'cyber', 'neon', 'golden', 'silver', 'iron'
+];
+
+const NOUNS = [
+  'dragon', 'tiger', 'phoenix', 'falcon', 'wolf', 'bear', 'lion', 'eagle',
+  'shark', 'whale', 'dolphin', 'cobra', 'viper', 'hawk', 'raven', 'fox',
+  'panther', 'knight', 'baron', 'king', 'queen', 'duke', 'ace', 'chief'
+];
+
+/**
+ * Generates a friendly, memorable lobby ID like "swift-dragon-42"
+ * @returns A string with format "adjective-noun-number"
+ */
+function generateFriendlyLobbyId(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num = Math.floor(Math.random() * 100);
+  return `${adj}-${noun}-${num}`;
+}
+
 /**
  * Handles a request to create a new lobby room.
  * @param request The incoming request.
@@ -959,14 +1094,37 @@ async function handleLobbyList(env: Env): Promise<Response> {
  */
 async function handleLobbyCreate(request: Request, env: Env): Promise<Response> {
   await initUi(env.monopolyui);
-  const randomBytes = new Uint8Array(8);
-  crypto.getRandomValues(randomBytes);
-  const id = 'game-' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  // Get the owner from the session
+  let ownerUser = 'anon';
+  const token = getCookie(request, 'SESSION');
+  if (token) {
+    const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
+    const sess = await verifySession(authSecret, token);
+    if (sess?.sub) ownerUser = sess.sub;
+  }
+
+  // Generate a friendly lobby ID
+  let id = generateFriendlyLobbyId();
+
+  // Ensure uniqueness (retry if collision)
+  let attempts = 0;
+  while (attempts < 10) {
+    const existing = await env.monopolyui.prepare('SELECT id FROM lobby_rooms WHERE id = ?').bind(id).first();
+    if (!existing) break;
+    id = generateFriendlyLobbyId();
+    attempts++;
+  }
+
   await env.monopolyui.prepare('INSERT INTO lobby_rooms (id, owner_user, status) VALUES (?, ?, "open")')
-    .bind(id, 'owner').run();
+    .bind(id, ownerUser).run();
+
+  // Also add the owner as a member
+  await env.monopolyui.prepare('INSERT OR IGNORE INTO lobby_members (room_id, user) VALUES (?, ?)').bind(id, ownerUser).run();
+
   // Durable Object id from name
   const doId = env.GAME.idFromName(id);
-  return json({ id, gamePath: `/api/game/${id}/websocket` });
+  return json({ id, gamePath: `/api/game/${id}/websocket`, owner: ownerUser });
 }
 
 /**
@@ -1015,4 +1173,559 @@ async function handleRecentGame(env: Env): Promise<Response> {
   } catch (e: any) {
     return json({ id: null });
   }
+}
+
+/**
+ * Handles a request to delete a lobby room (owner only).
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
+async function handleLobbyDelete(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = await safeJson(request);
+    const roomId = String(body?.room || body?.id || '');
+    if (!roomId) return json({ error: 'room ID required' }, 400);
+
+    // Verify the user is the owner
+    let currentUser = null;
+    const token = getCookie(request, 'SESSION');
+    if (token) {
+      const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
+      const sess = await verifySession(authSecret, token);
+      if (sess?.sub) currentUser = sess.sub;
+    }
+
+    if (!currentUser) {
+      return json({ error: 'Must be logged in to delete a lobby' }, 401);
+    }
+
+    await initUi(env.monopolyui);
+
+    // Check if user is the owner
+    const room: any = await env.monopolyui.prepare('SELECT owner_user FROM lobby_rooms WHERE id = ?').bind(roomId).first();
+    if (!room) {
+      return json({ error: 'Lobby not found' }, 404);
+    }
+
+    if (room.owner_user !== currentUser && currentUser.toLowerCase() !== 'whobcode13') {
+      return json({ error: 'Only the lobby owner can delete this lobby' }, 403);
+    }
+
+    // Delete members first, then the room
+    await env.monopolyui.prepare('DELETE FROM lobby_members WHERE room_id = ?').bind(roomId).run();
+    await env.monopolyui.prepare('DELETE FROM lobby_rooms WHERE id = ?').bind(roomId).run();
+
+    return json({ ok: true, deleted: roomId });
+  } catch (e: any) {
+    return json({ error: e?.message || 'Failed to delete lobby' }, 500);
+  }
+}
+
+/**
+ * Handles a request to send a magic login link via email.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response.
+ */
+async function handleMagicLinkRequest(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = await safeJson(request);
+    const email = String(body?.email || '').trim().toLowerCase();
+
+    if (!email || !email.includes('@')) {
+      return json({ error: 'Valid email required' }, 400);
+    }
+
+    await initCore(env.monopolyd1);
+
+    // Check if user exists
+    let user = await findUserByEmail(env.monopolyd1, email);
+
+    // If user doesn't exist, create one (auto-register)
+    if (!user) {
+      const username = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'player';
+      await createUserWithPassword(env.monopolyd1, email, username, ''); // Empty password for magic link users
+      user = await findUserByEmail(env.monopolyd1, email);
+    }
+
+    // Generate a magic link token (expires in 15 minutes)
+    const magicToken = generateMagicToken();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    // Save the magic token
+    await env.monopolyd1.prepare(
+      'UPDATE users SET verification_token = ?, verification_expires = ? WHERE email = ?'
+    ).bind(magicToken, expiresAt, email).run();
+
+    // Mark email as verified for magic link users
+    await env.monopolyd1.prepare('UPDATE users SET email_verified = 1 WHERE email = ?').bind(email).run();
+
+    // Send the magic link email
+    const baseUrl = new URL(request.url).origin;
+    const magicLinkUrl = `${baseUrl}/auth/magic-link/verify?token=${magicToken}&email=${encodeURIComponent(email)}`;
+
+    if (env.EMAIL) {
+      try {
+        await sendMagicLinkEmail(env.EMAIL, email, user?.username || email.split('@')[0], magicLinkUrl);
+      } catch (emailErr) {
+        console.error('Failed to send magic link email:', emailErr);
+        return json({ error: 'Failed to send email. Please try again.' }, 500);
+      }
+    } else {
+      console.warn('EMAIL binding not available');
+      return json({ error: 'Email service not configured' }, 503);
+    }
+
+    return json({ ok: true, message: 'Magic link sent! Check your email.' });
+  } catch (e: any) {
+    console.error('Magic link request error:', e);
+    return json({ error: e?.message || 'Failed to send magic link' }, 500);
+  }
+}
+
+/**
+ * Generates a secure random token for magic link authentication.
+ * @returns A URL-safe random token string.
+ */
+function generateMagicToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Sends a magic link email to the user.
+ * @param emailBinding The EMAIL binding.
+ * @param toEmail The recipient email.
+ * @param username The user's display name.
+ * @param magicLinkUrl The URL for the magic link.
+ */
+async function sendMagicLinkEmail(emailBinding: any, toEmail: string, username: string, magicLinkUrl: string): Promise<void> {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #c32222, #8a1818); padding: 30px; text-align: center;">
+      <h1 style="color: #fff; margin: 0; font-size: 28px;">🎲 whoBmonopoly</h1>
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0;">Sign in with one click</p>
+    </div>
+    <div style="padding: 30px;">
+      <h2 style="color: #333; margin-top: 0;">Hey ${username}! 👋</h2>
+      <p style="color: #555; line-height: 1.6;">Click the button below to sign in instantly - no password needed!</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${magicLinkUrl}" style="display: inline-block; background: linear-gradient(135deg, #c32222, #8a1818); color: #fff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+          🔐 Sign In Now
+        </a>
+      </div>
+      <p style="color: #888; font-size: 13px;">This link expires in 15 minutes and can only be used once.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p style="color: #999; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Hey ${username}!\n\nSign in to whoBmonopoly with one click:\n${magicLinkUrl}\n\nThis link expires in 15 minutes.\n\nIf you didn't request this, ignore this email.`;
+
+  const boundary = '----=_Part_' + Math.random().toString(36).substring(2);
+  const raw = [
+    'From: whoBmonopoly <signin@hwmnbn.me>',
+    `To: ${toEmail}`,
+    'Subject: Sign in to whoBmonopoly - Magic Link',
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    text,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    html,
+    '',
+    `--${boundary}--`
+  ].join('\r\n');
+
+  const msg = new EmailMessage('signin@hwmnbn.me', toEmail, raw);
+  await emailBinding.send(msg);
+}
+
+/**
+ * Handles magic link verification and signs in the user.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response (HTML page with auto-redirect or error).
+ */
+async function handleMagicLinkVerify(request: Request, env: Env): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    const email = url.searchParams.get('email')?.toLowerCase();
+
+    if (!token || !email) {
+      return new Response(generateMagicLinkPage('error', 'Missing token or email'), {
+        headers: { 'Content-Type': 'text/html' },
+        status: 400
+      });
+    }
+
+    await initCore(env.monopolyd1);
+
+    // Find user with this token
+    const user: any = await env.monopolyd1.prepare(
+      'SELECT username, email, verification_token, verification_expires FROM users WHERE email = ?'
+    ).bind(email).first();
+
+    if (!user) {
+      return new Response(generateMagicLinkPage('error', 'User not found'), {
+        headers: { 'Content-Type': 'text/html' },
+        status: 404
+      });
+    }
+
+    if (user.verification_token !== token) {
+      return new Response(generateMagicLinkPage('error', 'Invalid or expired link'), {
+        headers: { 'Content-Type': 'text/html' },
+        status: 400
+      });
+    }
+
+    // Check expiration
+    const expires = new Date(user.verification_expires).getTime();
+    if (Date.now() > expires) {
+      return new Response(generateMagicLinkPage('error', 'This link has expired. Please request a new one.'), {
+        headers: { 'Content-Type': 'text/html' },
+        status: 400
+      });
+    }
+
+    // Clear the token (one-time use)
+    await env.monopolyd1.prepare(
+      'UPDATE users SET verification_token = NULL, verification_expires = NULL WHERE email = ?'
+    ).bind(email).run();
+
+    // Create session
+    const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
+    const sessionToken = await signSession(authSecret, { sub: user.username || email, iat: Date.now() });
+
+    // Send login notification email
+    if (env.EMAIL) {
+      try {
+        const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
+        const userAgent = request.headers.get('User-Agent') || 'Unknown';
+        await sendLoginNotificationEmail(env.EMAIL, email, user.username, ip, userAgent);
+      } catch (e) {
+        console.error('Failed to send login notification:', e);
+      }
+    }
+
+    // Set cookie with cross-domain support for *.hwmnbn.me
+    const cookieValue = setCookieWithDomain('SESSION', sessionToken, {
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      domain: '.hwmnbn.me'
+    });
+
+    return new Response(generateMagicLinkPage('success', `Welcome back, ${user.username}!`), {
+      headers: {
+        'Content-Type': 'text/html',
+        'Set-Cookie': cookieValue
+      }
+    });
+  } catch (e: any) {
+    console.error('Magic link verify error:', e);
+    return new Response(generateMagicLinkPage('error', 'Verification failed'), {
+      headers: { 'Content-Type': 'text/html' },
+      status: 500
+    });
+  }
+}
+
+/**
+ * Sends a login notification email to the user.
+ */
+async function sendLoginNotificationEmail(emailBinding: any, toEmail: string, username: string, ip: string, userAgent: string): Promise<void> {
+  const loginTime = new Date().toUTCString();
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #48bb78, #38a169); padding: 30px; text-align: center;">
+      <h1 style="color: #fff; margin: 0; font-size: 28px;">✅ Login Successful</h1>
+    </div>
+    <div style="padding: 30px;">
+      <h2 style="color: #333; margin-top: 0;">Hello ${username}!</h2>
+      <p style="color: #555;">You've successfully signed in to your whoBmonopoly account.</p>
+      <div style="background: #f9f9f9; border-radius: 8px; padding: 16px; margin: 20px 0;">
+        <p style="margin: 0 0 8px; color: #666; font-size: 14px;"><strong>Time:</strong> ${loginTime}</p>
+        <p style="margin: 0 0 8px; color: #666; font-size: 14px;"><strong>IP:</strong> ${ip}</p>
+        <p style="margin: 0; color: #666; font-size: 14px;"><strong>Device:</strong> ${userAgent.substring(0, 50)}...</p>
+      </div>
+      <p style="color: #888; font-size: 13px;">If this wasn't you, please contact support@hwmnbn.me immediately.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Login Successful - whoBmonopoly\n\nHello ${username},\n\nYou've signed in successfully.\n\nTime: ${loginTime}\nIP: ${ip}\n\nIf this wasn't you, contact support@hwmnbn.me`;
+
+  const boundary = '----=_Part_' + Math.random().toString(36).substring(2);
+  const raw = [
+    'From: whoBmonopoly <signin@hwmnbn.me>',
+    `To: ${toEmail}`,
+    'Subject: Login successful - whoBmonopoly',
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    text,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    html,
+    '',
+    `--${boundary}--`
+  ].join('\r\n');
+
+  const msg = new EmailMessage('signin@hwmnbn.me', toEmail, raw);
+  await emailBinding.send(msg);
+}
+
+/**
+ * Generates a `Set-Cookie` header string with domain support for cross-site SSO.
+ */
+function setCookieWithDomain(name: string, value: string, opts: { maxAge?: number; domain?: string } = {}): string {
+  const attrs = [
+    `${name}=${value}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Secure'  // Required for cross-domain cookies
+  ];
+  if (opts.maxAge) attrs.push(`Max-Age=${opts.maxAge}`);
+  if (opts.domain) attrs.push(`Domain=${opts.domain}`);
+  return attrs.join('; ');
+}
+
+/**
+ * Generates an HTML page for magic link result.
+ */
+function generateMagicLinkPage(status: 'success' | 'error', message: string): string {
+  const isSuccess = status === 'success';
+  const bgColor = isSuccess ? '#4CAF50' : '#f44336';
+  const icon = isSuccess ? '✓' : '✕';
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${isSuccess ? 'Signed In' : 'Sign In Failed'} - whoBmonopoly</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      background: white;
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      max-width: 400px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    .icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: ${bgColor};
+      color: white;
+      font-size: 48px;
+      line-height: 80px;
+      margin: 0 auto 20px;
+    }
+    h1 { color: #333; margin: 0 0 10px; }
+    p { color: #666; margin: 0 0 20px; }
+    .button {
+      display: inline-block;
+      background: linear-gradient(135deg, #c32222, #8a1818);
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+  </style>
+  ${isSuccess ? '<script>setTimeout(() => window.location.href = "/", 2000);</script>' : ''}
+</head>
+<body>
+  <div class="container">
+    <div class="icon">${icon}</div>
+    <h1>${isSuccess ? 'Signed In!' : 'Sign In Failed'}</h1>
+    <p>${message}</p>
+    ${isSuccess ? '<p style="color:#888;font-size:13px;">Redirecting to game...</p>' : ''}
+    <a href="/" class="button">${isSuccess ? 'Go to Game' : 'Try Again'}</a>
+  </div>
+</body>
+</html>`;
+}
+
+// EmailMessage class for Cloudflare Email Workers
+declare class EmailMessage {
+  constructor(from: string, to: string, raw: string);
+}
+
+/**
+ * CORS headers for cross-subdomain SSO requests.
+ * Allows any *.hwmnbn.me subdomain to make auth requests.
+ */
+function corsHeaders(request: Request): Headers {
+  const origin = request.headers.get('Origin') || '';
+  const headers = new Headers();
+
+  // Only allow *.hwmnbn.me subdomains
+  if (origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost')) {
+    headers.set('Access-Control-Allow-Origin', origin);
+    headers.set('Access-Control-Allow-Credentials', 'true');
+    headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+  }
+
+  return headers;
+}
+
+/**
+ * Creates a JSON response with CORS headers for SSO.
+ */
+function jsonWithCors(request: Request, data: any, status = 200): Response {
+  const headers = corsHeaders(request);
+  headers.set('Content-Type', 'application/json');
+  return new Response(JSON.stringify(data), { status, headers });
+}
+
+/**
+ * Handles SSO validation requests from other *.hwmnbn.me subdomains.
+ * This endpoint validates the session cookie and returns user info.
+ *
+ * Other sites can call this to verify if a user is logged in:
+ * - GET/POST /auth/sso/validate (with credentials: 'include')
+ * - Returns: { valid: true, user: "username", stats: {...} } or { valid: false }
+ *
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with user info.
+ */
+async function handleSsoValidate(request: Request, env: Env): Promise<Response> {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    const headers = corsHeaders(request);
+    return new Response(null, { status: 204, headers });
+  }
+
+  try {
+    // Check for Cloudflare Access header first
+    const cfEmail = request.headers.get('Cf-Access-Authenticated-User-Email');
+    if (cfEmail) {
+      await initCore(env.monopolyd1);
+      const existing = await findUserByEmail(env.monopolyd1, cfEmail);
+      if (!existing) {
+        const username = cfEmail.split('@')[0];
+        await createUserWithPassword(env.monopolyd1, cfEmail, username, '');
+      }
+      return jsonWithCors(request, {
+        valid: true,
+        user: cfEmail,
+        provider: 'cloudflare-access'
+      });
+    }
+
+    // Check session cookie
+    const token = getCookie(request, 'SESSION');
+    if (!token) {
+      return jsonWithCors(request, { valid: false, reason: 'no_session' });
+    }
+
+    const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
+    const sess = await verifySession(authSecret, token);
+
+    if (!sess?.sub) {
+      return jsonWithCors(request, { valid: false, reason: 'invalid_token' });
+    }
+
+    // Get user stats
+    await initCore(env.monopolyd1);
+    const user = await ensureUserByUsername(env.monopolyd1, sess.sub);
+    const row: any = await env.monopolyd1.prepare(
+      'SELECT id, username, email, wins, losses, credits, gamer_id, email_verified, online FROM users WHERE username=?'
+    ).bind(user?.username || sess.sub).first();
+
+    return jsonWithCors(request, {
+      valid: true,
+      user: sess.sub,
+      userId: row?.id,
+      gamerId: row?.gamer_id,
+      email: row?.email,
+      emailVerified: row?.email_verified === 1,
+      stats: row ? {
+        wins: row.wins,
+        losses: row.losses,
+        credits: row.credits
+      } : null,
+      iat: sess.iat,
+      provider: 'session'
+    });
+  } catch (e: any) {
+    console.error('SSO validate error:', e);
+    return jsonWithCors(request, { valid: false, reason: 'error', details: e?.message }, 500);
+  }
+}
+
+/**
+ * Returns SSO configuration for other *.hwmnbn.me sites.
+ * This tells other sites how to integrate with the SSO system.
+ *
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with SSO config.
+ */
+async function handleSsoConfig(env: Env): Promise<Response> {
+  return json({
+    sso: {
+      domain: '.hwmnbn.me',
+      authority: 'intrepoly.hwmnbn.me',
+      endpoints: {
+        validate: 'https://intrepoly.hwmnbn.me/auth/sso/validate',
+        login: 'https://intrepoly.hwmnbn.me/auth/login-email',
+        signup: 'https://intrepoly.hwmnbn.me/auth/signup',
+        logout: 'https://intrepoly.hwmnbn.me/auth/logout',
+        whoami: 'https://intrepoly.hwmnbn.me/auth/whoami',
+        magicLink: 'https://intrepoly.hwmnbn.me/auth/magic-link/request'
+      },
+      cookieName: 'SESSION',
+      integration: {
+        databaseId: '5363662e-5cbb-4faf-982a-55b44c847791',
+        databaseName: 'monopolyd1',
+        authSecretEnvVar: 'AUTH_SECRET'
+      },
+      notes: [
+        'All workers under *.hwmnbn.me share the same session cookie',
+        'Use credentials: "include" when calling SSO endpoints',
+        'Workers can bind to the same monopolyd1 database for direct user access',
+        'Or call /auth/sso/validate to verify sessions via API'
+      ]
+    }
+  });
 }

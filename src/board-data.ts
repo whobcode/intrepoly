@@ -19,6 +19,7 @@ export interface Player {
   user?: string;
   email?: string;
   modelId?: string;
+  personality?: string;
 }
 
 // WebSocket message type
@@ -48,6 +49,8 @@ export interface GameState {
     ts: number;
   }>;
   chatAiNextTs?: number;
+  maxPlayers?: number;
+  hostPlayerId?: number;
   status?: 'open' | 'finished';
   winnerId?: number;
   trade?: {

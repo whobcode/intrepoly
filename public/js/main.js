@@ -1,5 +1,5 @@
 // Entry point
-import { gameIdFromHash, connect, join, send } from './api.js';
+import { gameIdFromHash, getCurrentGameId, connect, join, send } from './api.js';
 import { state, setWebSocket } from './state.js';
 import { showGame, hideGame, updateGameStats } from './ui.js';
 import { buildBoard, updateOwners, updateTokens } from './board.js';
@@ -10,9 +10,47 @@ import { rollDice, buyProperty } from './actions.js';
 import { whoAmI, login, logout } from './auth.js';
 import { initVideoChat, handleWebRTCMessage } from './video-chat.js';
 import { initBoardLogoCycling } from './board-logo.js';
+import { initStartGame } from './start-game.js';
 
 // Expose state for debugging
 window.__state = state;
+
+// Initialize game room ID display
+function initGameRoomDisplay() {
+  const roomIdEl = document.getElementById('game-room-id');
+  const copyBtn = document.getElementById('copy-room-link');
+
+  // Get or generate game ID from hash
+  const gameId = gameIdFromHash();
+
+  if (roomIdEl) {
+    roomIdEl.textContent = gameId;
+  }
+
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      const url = window.location.href;
+      try {
+        await navigator.clipboard.writeText(url);
+        copyBtn.textContent = '✅ Copied!';
+        setTimeout(() => { copyBtn.textContent = '📋 Copy Invite Link'; }, 2000);
+      } catch (e) {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        copyBtn.textContent = '✅ Copied!';
+        setTimeout(() => { copyBtn.textContent = '📋 Copy Invite Link'; }, 2000);
+      }
+    };
+  }
+}
+
+// Initialize on page load
+initGameRoomDisplay();
 
 const rollDiceBtn = document.getElementById('nextbutton');
 const startButton = document.getElementById('startbutton');
@@ -76,7 +114,9 @@ function onState(gameState) {
   window.__state.lastGameState = gameState;
 
   // Handle WebRTC messages
-  if (gameState.type && gameState.type.startsWith('PEER_') || gameState.type && gameState.type.startsWith('WEBRTC_')) {
+  if (gameState.type && (gameState.type.startsWith('PEER_') ||
+                         gameState.type.startsWith('WEBRTC_') ||
+                         gameState.type === 'EXISTING_VIDEO_PEERS')) {
     handleWebRTCMessage(gameState);
   }
 
@@ -109,10 +149,13 @@ function onState(gameState) {
     }
   }
 
-  // Enable roll button for current player
+  // Enable roll button for current player ONLY when in rolling state
   const rollDiceBtn = document.getElementById('nextbutton');
   if (state.playerId !== undefined) {
-    rollDiceBtn.disabled = (gameState.currentPlayerId !== state.playerId);
+    // Disable if not current player OR if not in rolling state
+    const isMyTurn = gameState.currentPlayerId === state.playerId;
+    const canRoll = gameState.turnState === 'rolling' || gameState.turnState === undefined;
+    rollDiceBtn.disabled = !isMyTurn || !canRoll;
   } else {
     rollDiceBtn.disabled = true;
   }
@@ -146,6 +189,23 @@ async function startGame() {
     }
   }
   if (!window.__user) { openLogin(); return; }
+
+  // Read preferences from sessionStorage (set by menu.html)
+  const savedName = sessionStorage.getItem('playerName');
+  const savedColor = sessionStorage.getItem('playerColor');
+  const savedCount = sessionStorage.getItem('playerCount');
+  const isHost = sessionStorage.getItem('isHost') === 'true';
+
+  // Update form inputs with saved preferences
+  const nameInput = document.getElementById('player1name');
+  const colorInput = document.getElementById('player1color');
+  if (savedName && nameInput) nameInput.value = savedName;
+  if (savedColor && colorInput) colorInput.value = savedColor;
+
+  // Store player count in window for the game to use
+  window.__playerCount = savedCount ? parseInt(savedCount, 10) : null;
+  window.__isHost = isHost;
+
   const id = gameIdFromHash();
   const ws = connect(id, { onWelcome, onState, onError, onClose, onOpen });
   setWebSocket(ws);
@@ -268,8 +328,23 @@ async function refreshAuth() {
 
 window.addEventListener('DOMContentLoaded', async () => {
   await refreshAuth();
+
+  // If user is logged in and there's no game hash, redirect to menu
+  const hash = window.location.hash.slice(1);
+  if (window.__user && !hash) {
+    window.location.href = '/menu.html';
+    return;
+  }
+
+  // If there's a game hash and user is logged in, auto-start the game
+  if (window.__user && hash) {
+    // Small delay to ensure everything is loaded
+    setTimeout(() => startGame(), 100);
+  }
+
   initChatUI();
   initVideoChat();
+  initStartGame();
 
   const loginBtn = document.getElementById('loginbtn');
   const logoutBtn = document.getElementById('logoutbtn');
@@ -279,6 +354,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const loginEmailBtn = document.getElementById('loginemailbtn');
   const shareBtn = document.getElementById('sharelink');
   const minimizeVideoBtn = document.getElementById('minimize-video-btn');
+  const magicLinkBtn = document.getElementById('magic-link-btn');
+  const magicEmailInput = document.getElementById('magic-email');
+  const magicLinkStatus = document.getElementById('magic-link-status');
 
   if (loginBtn) loginBtn.onclick = openLogin;
   if (logoutBtn) logoutBtn.onclick = async () => {
@@ -307,23 +385,74 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
   if (loginSubmit) loginSubmit.onclick = async () => {
     const name = document.getElementById('loginname').value.trim();
-    if (name) { await login(name); await refreshAuth(); closeLogin(); }
+    if (name) {
+      await login(name);
+      await refreshAuth();
+      closeLogin();
+      // Redirect to menu page after successful login
+      window.location.href = '/menu.html';
+    }
   };
   if (loginCancel) loginCancel.onclick = closeLogin;
   if (signupBtn) signupBtn.onclick = async () => {
     const email = document.getElementById('email').value.trim();
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
-    if (email && username && password) { await (await import('./auth.js')).signup(email, username, password); await refreshAuth(); }
+    if (email && username && password) {
+      await (await import('./auth.js')).signup(email, username, password);
+      await refreshAuth();
+      alert('Account created! Please check your email to verify your account.');
+    }
   };
   if (loginEmailBtn) loginEmailBtn.onclick = async () => {
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
-    if (email && password) { await (await import('./auth.js')).loginEmail(email, password); await refreshAuth(); closeLogin(); }
+    if (email && password) {
+      await (await import('./auth.js')).loginEmail(email, password);
+      await refreshAuth();
+      closeLogin();
+      // Redirect to menu page after successful login
+      window.location.href = '/menu.html';
+    }
   };
   if (shareBtn) shareBtn.onclick = async () => {
     const url = window.location.href;
     try { await navigator.clipboard.writeText(url); showStatus('Invite link copied.'); setTimeout(hideStatus, 1200);} catch {}
+  };
+
+  // Magic Link Authentication
+  if (magicLinkBtn) magicLinkBtn.onclick = async () => {
+    const email = magicEmailInput?.value?.trim();
+    if (!email || !email.includes('@')) {
+      if (magicLinkStatus) {
+        magicLinkStatus.textContent = 'Please enter a valid email address';
+        magicLinkStatus.style.color = '#dc3545';
+      }
+      return;
+    }
+
+    magicLinkBtn.disabled = true;
+    magicLinkBtn.textContent = 'Sending...';
+    if (magicLinkStatus) {
+      magicLinkStatus.textContent = '';
+    }
+
+    try {
+      const { requestMagicLink } = await import('./auth.js');
+      const result = await requestMagicLink(email);
+      if (magicLinkStatus) {
+        magicLinkStatus.textContent = '✅ ' + (result.message || 'Check your email for the magic link!');
+        magicLinkStatus.style.color = '#28a745';
+      }
+      magicLinkBtn.textContent = 'Link Sent!';
+    } catch (e) {
+      if (magicLinkStatus) {
+        magicLinkStatus.textContent = '❌ ' + (e.message || 'Failed to send magic link');
+        magicLinkStatus.style.color = '#dc3545';
+      }
+      magicLinkBtn.disabled = false;
+      magicLinkBtn.textContent = 'Send Magic Link 🔐';
+    }
   };
 
   // Video panel minimize toggle
