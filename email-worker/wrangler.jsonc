@@ -10,7 +10,17 @@
     "FORWARD_TO": "tru@hwmnbn.me"
   },
 
+  // Send Email binding - allows sending outbound emails
+  // Requires Email Routing to be configured on hwmnbn.me domain
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "destination_address": "noreply@hwmnbn.me"
+    }
+  ],
+
   // KV namespace for rate limiting
+  // Create with: npx wrangler kv:namespace create RATE_LIMIT
   "kv_namespaces": [
     {
       "binding": "RATE_LIMIT",
@@ -18,23 +28,22 @@
     }
   ],
 
-  // D1 database for email logs
+  // D1 database for email logs (optional - uses main app's DB if not set)
+  // Create with: npx wrangler d1 create email_logs
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "email_logs",
-      "database_id": "YOUR_D1_DATABASE_ID"
+      "database_name": "monopolyd1",
+      "database_id": "5363662e-5cbb-4faf-982a-55b44c847791"
     }
-  ],
+  ]
 
-  // Email routing - this Worker will receive emails
-  // Configure these routes in Cloudflare Dashboard > Email Routing > Email Workers
-  // Routes to configure:
-  //   - noreply@hwmnbn.me -> hwmnbn-email-worker
-  //   - signin@hwmnbn.me -> hwmnbn-email-worker
-  //   - signup@hwmnbn.me -> hwmnbn-email-worker
-  //   - support@hwmnbn.me -> hwmnbn-email-worker
-  //   - info@hwmnbn.me -> hwmnbn-email-worker
-  //   - contact@hwmnbn.me -> hwmnbn-email-worker
-  //   - *@hwmnbn.me (catch-all) -> hwmnbn-email-worker
+  // Email Routing Setup (Cloudflare Dashboard > Email Routing > Routing Rules):
+  // 1. Enable Email Routing on hwmnbn.me
+  // 2. Add these addresses as "Email Workers" routes:
+  //    - noreply@hwmnbn.me -> hwmnbn-email-worker
+  //    - signin@hwmnbn.me -> hwmnbn-email-worker
+  //    - signup@hwmnbn.me -> hwmnbn-email-worker
+  //    - support@hwmnbn.me -> hwmnbn-email-worker
+  //    - *@hwmnbn.me (catch-all) -> hwmnbn-email-worker
 }

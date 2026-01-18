@@ -158,6 +158,55 @@ If this wasn't you, please contact support@hwmnbn.me immediately.
   return { html, text };
 }
 
+function createMagicLinkEmail(username: string, magicLinkUrl: string): { html: string; text: string } {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #c32222, #8a1818); padding: 30px; text-align: center;">
+      <h1 style="color: #fff; margin: 0; font-size: 28px;">🎲 whoBmonopoly</h1>
+      <p style="color: rgba(255,255,255,0.8); margin: 10px 0 0;">Sign in with one click</p>
+    </div>
+    <div style="padding: 30px;">
+      <h2 style="color: #333; margin-top: 0;">Hey ${username}! 👋</h2>
+      <p style="color: #555; line-height: 1.6;">Click the button below to sign in instantly - no password needed!</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${magicLinkUrl}" style="display: inline-block; background: linear-gradient(135deg, #c32222, #8a1818); color: #fff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+          🔐 Sign In Now
+        </a>
+      </div>
+      <p style="color: #888; font-size: 13px;">This link expires in 15 minutes and can only be used once.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p style="color: #999; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    <div style="background: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #eee;">
+      <p style="color: #999; font-size: 12px; margin: 0;">© 2025 whoBmonopoly</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+Hey ${username}!
+
+Sign in to whoBmonopoly with one click:
+${magicLinkUrl}
+
+This link expires in 15 minutes and can only be used once.
+
+If you didn't request this, you can safely ignore this email.
+
+- The whoBmonopoly Team
+`;
+
+  return { html, text };
+}
+
 function createNoReplyAutoResponse(): { html: string; text: string } {
   const html = `
 <!DOCTYPE html>
@@ -369,6 +418,19 @@ export default {
         const verifyUrl = `https://intrepoly.hwmnbn.me/auth/verify?token=${body.token}`;
         const { html, text } = createWelcomeEmail(body.username, verifyUrl);
         const emailMsg = createEmailMessage('noreply@hwmnbn.me', body.email, 'Verify your whoBmonopoly account', html, text);
+        await env.EMAIL.send(emailMsg);
+        return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // Send magic link email
+    if (url.pathname === '/api/send-magic-link' && request.method === 'POST') {
+      try {
+        const body = await request.json() as { email: string; username: string; magicLinkUrl: string };
+        const { html, text } = createMagicLinkEmail(body.username, body.magicLinkUrl);
+        const emailMsg = createEmailMessage('signin@hwmnbn.me', body.email, 'Sign in to whoBmonopoly - Magic Link', html, text);
         await env.EMAIL.send(emailMsg);
         return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
       } catch (e: any) {

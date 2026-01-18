@@ -131,6 +131,32 @@ export default {
       return json({ models: OLLAMA_MODELS, default: defaultModel });
     }
 
+    // TURN credentials endpoint for WebRTC video chat
+    if (path === '/api/turn/credentials' && request.method === 'GET') {
+      return handleTurnCredentials(request, env);
+    }
+
+    // SFU (Serverless Forwarding Unit) endpoints for multi-party video
+    if (path === '/api/sfu/session/new' && request.method === 'POST') {
+      return handleSfuNewSession(request, env);
+    }
+    if (path.match(/^\/api\/sfu\/session\/([^\/]+)\/tracks\/new$/) && request.method === 'POST') {
+      const sessionId = path.match(/^\/api\/sfu\/session\/([^\/]+)\/tracks\/new$/)?.[1];
+      return handleSfuNewTracks(request, env, sessionId!);
+    }
+    if (path.match(/^\/api\/sfu\/session\/([^\/]+)\/renegotiate$/) && request.method === 'PUT') {
+      const sessionId = path.match(/^\/api\/sfu\/session\/([^\/]+)\/renegotiate$/)?.[1];
+      return handleSfuRenegotiate(request, env, sessionId!);
+    }
+    if (path.match(/^\/api\/sfu\/session\/([^\/]+)\/tracks\/close$/) && request.method === 'PUT') {
+      const sessionId = path.match(/^\/api\/sfu\/session\/([^\/]+)\/tracks\/close$/)?.[1];
+      return handleSfuCloseTracks(request, env, sessionId!);
+    }
+    if (path.match(/^\/api\/sfu\/session\/([^\/]+)$/) && request.method === 'GET') {
+      const sessionId = path.match(/^\/api\/sfu\/session\/([^\/]+)$/)?.[1];
+      return handleSfuGetSession(request, env, sessionId!);
+    }
+
     if (path === '/api/ollama/chat' && request.method === 'POST') {
       const body = await safeJson(request);
       const model = body?.model || env.OLLAMA_MODEL || 'deepseek-v3.1:671b-cloud';
@@ -323,8 +349,10 @@ interface Env {
   ASSETS: Fetcher;
   /** The Cloudflare Images binding. */
   IMAGES: any;
-  /** The Cloudflare Email binding for sending emails. */
+  /** The Cloudflare Email binding for sending emails (legacy). */
   EMAIL: any;
+  /** The Email Worker service binding for sending emails via HTTP API. */
+  EMAIL_WORKER?: Fetcher;
   /** The D1 database for core game data. */
   monopolyd1: D1Database;
   /** The D1 database for UI/lobby data. */
@@ -343,6 +371,14 @@ interface Env {
   OLLAMA_API_KEY?: string;
   /** The default Ollama model to use. */
   OLLAMA_MODEL?: string;
+  /** Cloudflare TURN Token ID. */
+  TURN_TOKEN_ID?: string;
+  /** Cloudflare TURN API Token (set via wrangler secret). */
+  TURN_API_TOKEN?: string;
+  /** Cloudflare Realtime SFU App ID. */
+  SFU_APP_ID?: string;
+  /** Cloudflare Realtime SFU API Token (set via wrangler secret). */
+  SFU_API_TOKEN?: string;
 }
 
 /**
@@ -793,14 +829,13 @@ async function handleAuthSignup(request: Request, env: Env): Promise<Response> {
     const verificationToken = generateVerificationToken();
     await saveVerificationToken(env.monopolyd1, email, verificationToken);
 
-    // Send verification email
-    const baseUrl = new URL(request.url).origin;
+    // Send verification email via EMAIL_WORKER service binding
     try {
-      if (env.EMAIL) {
-        await sendVerificationEmail(env.EMAIL, email, username, verificationToken, baseUrl);
-      } else {
-        console.warn('EMAIL binding not available, skipping verification email');
-      }
+      await sendEmailViaWorker(env, 'verification', {
+        email,
+        username,
+        token: verificationToken
+      });
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
       // Don't fail signup if email fails - user can request resend
@@ -845,12 +880,12 @@ async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
       });
     }
 
-    // Send welcome email
-    const baseUrl = url.origin;
+    // Send welcome email via EMAIL_WORKER
     try {
-      if (env.EMAIL) {
-        await sendWelcomeEmail(env.EMAIL, user.email, user.username, baseUrl);
-      }
+      await sendEmailViaWorker(env, 'welcome', {
+        email: user.email,
+        username: user.username
+      });
     } catch (emailError) {
       console.error('Failed to send welcome email:', emailError);
     }
@@ -894,17 +929,16 @@ async function handleResendVerification(request: Request, env: Env): Promise<Res
     const verificationToken = generateVerificationToken();
     await saveVerificationToken(env.monopolyd1, email, verificationToken);
 
-    // Send verification email
-    const baseUrl = new URL(request.url).origin;
+    // Send verification email via EMAIL_WORKER
     try {
-      if (env.EMAIL) {
-        await sendVerificationEmail(env.EMAIL, email, user.username, verificationToken, baseUrl);
-      } else {
-        return json({ error: 'Email service not available' }, 503);
-      }
+      await sendEmailViaWorker(env, 'verification', {
+        email,
+        username: user.username,
+        token: verificationToken
+      });
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
-      return json({ error: 'Failed to send email' }, 500);
+      return json({ error: 'Failed to send email. Please try again.' }, 500);
     }
 
     return json({ ok: true, message: 'Verification email sent' });
@@ -1261,20 +1295,19 @@ async function handleMagicLinkRequest(request: Request, env: Env): Promise<Respo
     // Mark email as verified for magic link users
     await env.monopolyd1.prepare('UPDATE users SET email_verified = 1 WHERE email = ?').bind(email).run();
 
-    // Send the magic link email
+    // Send the magic link email via EMAIL_WORKER
     const baseUrl = new URL(request.url).origin;
     const magicLinkUrl = `${baseUrl}/auth/magic-link/verify?token=${magicToken}&email=${encodeURIComponent(email)}`;
 
-    if (env.EMAIL) {
-      try {
-        await sendMagicLinkEmail(env.EMAIL, email, user?.username || email.split('@')[0], magicLinkUrl);
-      } catch (emailErr) {
-        console.error('Failed to send magic link email:', emailErr);
-        return json({ error: 'Failed to send email. Please try again.' }, 500);
-      }
-    } else {
-      console.warn('EMAIL binding not available');
-      return json({ error: 'Email service not configured' }, 503);
+    try {
+      await sendEmailViaWorker(env, 'magic-link', {
+        email,
+        username: user?.username || email.split('@')[0],
+        magicLinkUrl
+      });
+    } catch (emailErr) {
+      console.error('Failed to send magic link email:', emailErr);
+      return json({ error: 'Failed to send email. Please try again.' }, 500);
     }
 
     return json({ ok: true, message: 'Magic link sent! Check your email.' });
@@ -1292,6 +1325,79 @@ function generateMagicToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Sends an email via the EMAIL_WORKER service binding.
+ * This uses the separate email-worker which has the proper EMAIL binding configured.
+ * @param env The environment bindings.
+ * @param type The type of email to send ('verification' | 'welcome' | 'magic-link' | 'login-notification').
+ * @param data The email data.
+ */
+async function sendEmailViaWorker(env: Env, type: string, data: Record<string, any>): Promise<void> {
+  // Prefer EMAIL_WORKER service binding, fall back to direct EMAIL binding
+  if (env.EMAIL_WORKER) {
+    let endpoint = '';
+    let body: Record<string, any> = {};
+
+    switch (type) {
+      case 'verification':
+        endpoint = '/api/send-verification';
+        body = { email: data.email, username: data.username, token: data.token };
+        break;
+      case 'welcome':
+        // The email-worker doesn't have a welcome endpoint yet, use verification as template
+        endpoint = '/api/send-verification';
+        body = { email: data.email, username: data.username, token: 'welcome' };
+        break;
+      case 'magic-link':
+        endpoint = '/api/send-magic-link';
+        body = { email: data.email, username: data.username, magicLinkUrl: data.magicLinkUrl };
+        break;
+      case 'login-notification':
+        endpoint = '/api/send-login-notification';
+        body = { email: data.email, username: data.username, ip: data.ip, userAgent: data.userAgent };
+        break;
+      default:
+        throw new Error(`Unknown email type: ${type}`);
+    }
+
+    const response = await env.EMAIL_WORKER.fetch(`http://email-worker${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error((error as any).error || `Email worker returned ${response.status}`);
+    }
+
+    console.log(`Email sent via EMAIL_WORKER: ${type} to ${data.email}`);
+    return;
+  }
+
+  // Fallback to legacy EMAIL binding (may not work for arbitrary recipients)
+  if (env.EMAIL) {
+    console.warn('Using legacy EMAIL binding - may not work for all recipients');
+    switch (type) {
+      case 'verification':
+        const { sendVerificationEmail } = await import('./email');
+        await sendVerificationEmail(env.EMAIL, data.email, data.username, data.token, 'https://intrepoly.hwmnbn.me');
+        break;
+      case 'magic-link':
+        await sendMagicLinkEmail(env.EMAIL, data.email, data.username, data.magicLinkUrl);
+        break;
+      case 'login-notification':
+        await sendLoginNotificationEmail(env.EMAIL, data.email, data.username, data.ip, data.userAgent);
+        break;
+      default:
+        console.warn(`No fallback for email type: ${type}`);
+    }
+    return;
+  }
+
+  throw new Error('No email service available (EMAIL_WORKER or EMAIL binding)');
 }
 
 /**
@@ -1413,15 +1519,18 @@ async function handleMagicLinkVerify(request: Request, env: Env): Promise<Respon
     const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
     const sessionToken = await signSession(authSecret, { sub: user.username || email, iat: Date.now() });
 
-    // Send login notification email
-    if (env.EMAIL) {
-      try {
-        const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
-        const userAgent = request.headers.get('User-Agent') || 'Unknown';
-        await sendLoginNotificationEmail(env.EMAIL, email, user.username, ip, userAgent);
-      } catch (e) {
-        console.error('Failed to send login notification:', e);
-      }
+    // Send login notification email via EMAIL_WORKER
+    try {
+      const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
+      const userAgent = request.headers.get('User-Agent') || 'Unknown';
+      await sendEmailViaWorker(env, 'login-notification', {
+        email,
+        username: user.username,
+        ip,
+        userAgent
+      });
+    } catch (e) {
+      console.error('Failed to send login notification:', e);
     }
 
     // Set cookie with cross-domain support for *.hwmnbn.me
@@ -1582,6 +1691,348 @@ function generateMagicLinkPage(status: 'success' | 'error', message: string): st
   </div>
 </body>
 </html>`;
+}
+
+/**
+ * Handles requests for TURN server credentials.
+ * Generates short-lived credentials from Cloudflare's TURN service for WebRTC.
+ * @param request The incoming request.
+ * @param env The environment bindings.
+ * @returns A promise that resolves to a Response with ICE server config.
+ */
+async function handleTurnCredentials(request: Request, env: Env): Promise<Response> {
+  // Build CORS headers
+  const origin = request.headers.get('Origin') || '';
+  const corsAllowed = origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost');
+
+  const addCors = (headers: HeadersInit): HeadersInit => {
+    if (corsAllowed) {
+      (headers as Record<string, string>)['Access-Control-Allow-Origin'] = origin;
+      (headers as Record<string, string>)['Access-Control-Allow-Credentials'] = 'true';
+    }
+    return headers;
+  };
+
+  try {
+    const turnTokenId = env.TURN_TOKEN_ID;
+    const turnApiToken = env.TURN_API_TOKEN;
+
+    if (!turnTokenId || !turnApiToken) {
+      // Return STUN-only config if TURN is not configured
+      return new Response(JSON.stringify({
+        iceServers: [
+          { urls: 'stun:stun.cloudflare.com:3478' },
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ],
+        warning: 'TURN not configured, using STUN only'
+      }), {
+        headers: addCors({ 'Content-Type': 'application/json' })
+      });
+    }
+
+    // Get user identifier for tracking (optional)
+    let customIdentifier = 'anonymous';
+    const token = getCookie(request, 'SESSION');
+    if (token) {
+      const authSecret = env.AUTH_SECRET || 'dev-secret-not-for-prod';
+      const sess = await verifySession(authSecret, token);
+      if (sess?.sub) customIdentifier = sess.sub;
+    }
+
+    // Generate TURN credentials from Cloudflare API
+    // TTL of 24 hours (86400 seconds) - adjust based on typical game duration
+    const turnResponse = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${turnTokenId}/credentials/generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${turnApiToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ttl: 86400, // 24 hours
+          customIdentifier: customIdentifier
+        })
+      }
+    );
+
+    if (!turnResponse.ok) {
+      const errorText = await turnResponse.text();
+      console.error('TURN API error:', turnResponse.status, errorText);
+
+      // Fallback to STUN-only
+      return new Response(JSON.stringify({
+        iceServers: [
+          { urls: 'stun:stun.cloudflare.com:3478' },
+          { urls: 'stun:stun.l.google.com:19302' }
+        ],
+        error: 'TURN credential generation failed',
+        fallback: true
+      }), {
+        headers: addCors({ 'Content-Type': 'application/json' })
+      });
+    }
+
+    const turnData = await turnResponse.json() as any;
+
+    // Return the iceServers configuration
+    return new Response(JSON.stringify({
+      iceServers: turnData.iceServers || [
+        {
+          urls: [
+            'stun:stun.cloudflare.com:3478',
+            'turn:turn.cloudflare.com:3478?transport=udp',
+            'turn:turn.cloudflare.com:3478?transport=tcp',
+            'turns:turn.cloudflare.com:5349?transport=tcp'
+          ],
+          username: turnData.username,
+          credential: turnData.credential
+        }
+      ],
+      ttl: 86400,
+      provider: 'cloudflare'
+    }), {
+      headers: addCors({
+        'Content-Type': 'application/json',
+        'Cache-Control': 'private, max-age=3600' // Cache for 1 hour client-side
+      })
+    });
+
+  } catch (e: any) {
+    console.error('TURN credentials error:', e);
+    return new Response(JSON.stringify({
+      error: e?.message || 'Failed to generate TURN credentials',
+      iceServers: [
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        { urls: 'stun:stun.l.google.com:19302' }
+      ],
+      fallback: true
+    }), {
+      status: 500,
+      headers: addCors({ 'Content-Type': 'application/json' })
+    });
+  }
+}
+
+// ============================================
+// SFU (Serverless Forwarding Unit) Handlers
+// ============================================
+
+const SFU_API_BASE = 'https://rtc.live.cloudflare.com/v1/apps';
+
+/**
+ * Helper to build CORS headers for SFU requests.
+ */
+function sfuCorsHeaders(request: Request): HeadersInit {
+  const origin = request.headers.get('Origin') || '';
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (origin.endsWith('.hwmnbn.me') || origin === 'https://hwmnbn.me' || origin.includes('localhost')) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+  return headers;
+}
+
+/**
+ * Creates a new SFU session.
+ * POST /api/sfu/session/new
+ */
+async function handleSfuNewSession(request: Request, env: Env): Promise<Response> {
+  const headers = sfuCorsHeaders(request);
+
+  if (!env.SFU_APP_ID || !env.SFU_API_TOKEN) {
+    return new Response(JSON.stringify({ error: 'SFU not configured' }), { status: 503, headers });
+  }
+
+  try {
+    const body = await safeJson(request);
+
+    const sfuResponse = await fetch(`${SFU_API_BASE}/${env.SFU_APP_ID}/sessions/new`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.SFU_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body || {})
+    });
+
+    const data = await sfuResponse.json();
+
+    if (!sfuResponse.ok) {
+      return new Response(JSON.stringify({ error: 'SFU API error', details: data }), {
+        status: sfuResponse.status,
+        headers
+      });
+    }
+
+    return new Response(JSON.stringify(data), { headers });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e?.message || 'Failed to create session' }), {
+      status: 500,
+      headers
+    });
+  }
+}
+
+/**
+ * Adds tracks to an existing SFU session.
+ * POST /api/sfu/session/:sessionId/tracks/new
+ */
+async function handleSfuNewTracks(request: Request, env: Env, sessionId: string): Promise<Response> {
+  const headers = sfuCorsHeaders(request);
+
+  if (!env.SFU_APP_ID || !env.SFU_API_TOKEN) {
+    return new Response(JSON.stringify({ error: 'SFU not configured' }), { status: 503, headers });
+  }
+
+  try {
+    const body = await safeJson(request);
+
+    const sfuResponse = await fetch(`${SFU_API_BASE}/${env.SFU_APP_ID}/sessions/${sessionId}/tracks/new`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.SFU_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body || {})
+    });
+
+    const data = await sfuResponse.json();
+
+    if (!sfuResponse.ok) {
+      return new Response(JSON.stringify({ error: 'SFU API error', details: data }), {
+        status: sfuResponse.status,
+        headers
+      });
+    }
+
+    return new Response(JSON.stringify(data), { headers });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e?.message || 'Failed to add tracks' }), {
+      status: 500,
+      headers
+    });
+  }
+}
+
+/**
+ * Renegotiates an SFU session.
+ * PUT /api/sfu/session/:sessionId/renegotiate
+ */
+async function handleSfuRenegotiate(request: Request, env: Env, sessionId: string): Promise<Response> {
+  const headers = sfuCorsHeaders(request);
+
+  if (!env.SFU_APP_ID || !env.SFU_API_TOKEN) {
+    return new Response(JSON.stringify({ error: 'SFU not configured' }), { status: 503, headers });
+  }
+
+  try {
+    const body = await safeJson(request);
+
+    const sfuResponse = await fetch(`${SFU_API_BASE}/${env.SFU_APP_ID}/sessions/${sessionId}/renegotiate`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${env.SFU_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body || {})
+    });
+
+    const data = await sfuResponse.json();
+
+    if (!sfuResponse.ok) {
+      return new Response(JSON.stringify({ error: 'SFU API error', details: data }), {
+        status: sfuResponse.status,
+        headers
+      });
+    }
+
+    return new Response(JSON.stringify(data), { headers });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e?.message || 'Failed to renegotiate' }), {
+      status: 500,
+      headers
+    });
+  }
+}
+
+/**
+ * Closes tracks in an SFU session.
+ * PUT /api/sfu/session/:sessionId/tracks/close
+ */
+async function handleSfuCloseTracks(request: Request, env: Env, sessionId: string): Promise<Response> {
+  const headers = sfuCorsHeaders(request);
+
+  if (!env.SFU_APP_ID || !env.SFU_API_TOKEN) {
+    return new Response(JSON.stringify({ error: 'SFU not configured' }), { status: 503, headers });
+  }
+
+  try {
+    const body = await safeJson(request);
+
+    const sfuResponse = await fetch(`${SFU_API_BASE}/${env.SFU_APP_ID}/sessions/${sessionId}/tracks/close`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${env.SFU_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body || {})
+    });
+
+    const data = await sfuResponse.json();
+
+    if (!sfuResponse.ok) {
+      return new Response(JSON.stringify({ error: 'SFU API error', details: data }), {
+        status: sfuResponse.status,
+        headers
+      });
+    }
+
+    return new Response(JSON.stringify(data), { headers });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e?.message || 'Failed to close tracks' }), {
+      status: 500,
+      headers
+    });
+  }
+}
+
+/**
+ * Gets session information.
+ * GET /api/sfu/session/:sessionId
+ */
+async function handleSfuGetSession(request: Request, env: Env, sessionId: string): Promise<Response> {
+  const headers = sfuCorsHeaders(request);
+
+  if (!env.SFU_APP_ID || !env.SFU_API_TOKEN) {
+    return new Response(JSON.stringify({ error: 'SFU not configured' }), { status: 503, headers });
+  }
+
+  try {
+    const sfuResponse = await fetch(`${SFU_API_BASE}/${env.SFU_APP_ID}/sessions/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${env.SFU_API_TOKEN}`
+      }
+    });
+
+    const data = await sfuResponse.json();
+
+    if (!sfuResponse.ok) {
+      return new Response(JSON.stringify({ error: 'SFU API error', details: data }), {
+        status: sfuResponse.status,
+        headers
+      });
+    }
+
+    return new Response(JSON.stringify(data), { headers });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e?.message || 'Failed to get session' }), {
+      status: 500,
+      headers
+    });
+  }
 }
 
 // EmailMessage class for Cloudflare Email Workers
