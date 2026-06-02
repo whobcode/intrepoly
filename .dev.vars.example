@@ -1,0 +1,17 @@
+# Worker-runtime secrets. Copy to `.dev.vars` for `wrangler dev`;
+# set in prod with `npx wrangler secret put <NAME>`.
+# (NOTE: the worker reads these via `env.*` — `.env` is only read by the Node tunnel/init scripts.)
+
+# Session / auth signing secret
+AUTH_SECRET=generate-a-long-random-string
+
+# Ollama Cloud API key (AI opponent / chat)
+OLLAMA_API_KEY=
+
+# Cloudflare Realtime TURN (also in .env for the Node scripts)
+TURN_TOKEN_ID=
+TURN_API_TOKEN=
+
+# Cloudflare Realtime SFU
+SFU_APP_ID=
+SFU_API_TOKEN=
